@@ -24,7 +24,7 @@ from rest_framework.settings import api_settings
 from apps.users.audit import audit_product_action
 from apps.users.entitlements import require_feature
 from apps.users.models import User
-from .. import ai_budget, ai_usage
+from .. import ai_budget, ai_providers, ai_usage
 from ..models import (
     ActivityLog, Essay, EssayCheckpoint, EssayDepthCheck, EssayFolder, EssayRevision, EssayTab, EssayTabEdit,
     Notification, StudentProfile,
@@ -836,7 +836,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
         # The AI call runs outside any transaction so no row lock is held while waiting on it.
         if coach.gateway_configured():
             if not spend_coach_budget(request.user):
-                ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
+                ai_usage.record('essay_coach', request.user, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
                 raise EssayLabError('Naseeb AI is resting for today. Please try again tomorrow.', 'coach_resting', 503)
             try:
                 # Both calls of the check are recorded in ai_usage inside run_ai_check.
@@ -851,7 +851,7 @@ class EssayLabEssayViewSet(StudentCollabMixin, EssayLabViewMixin, viewsets.Gener
                 ai_budget.refund('essay_coach', request.user)
         else:
             result, model = coach.run_local_check(essay, tab.content)
-            ai_usage.record('essay_coach', request.user, provider='gateway', status=ai_usage.LOCAL_FALLBACK)
+            ai_usage.record('essay_coach', request.user, provider=ai_providers.provider(), status=ai_usage.LOCAL_FALLBACK)
 
         with transaction.atomic():
             # The tab (or the essay) may have been deleted during the AI call.

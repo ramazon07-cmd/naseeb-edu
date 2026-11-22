@@ -30,7 +30,6 @@ import re
 import time
 import unicodedata
 import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -38,7 +37,7 @@ from pathlib import Path
 from django.conf import settings
 from core.ai_policy import outbound_ai_allowed
 
-from .. import ai_usage
+from .. import ai_providers, ai_usage
 from ..assistant import redact_pii
 
 logger = logging.getLogger('naseeb.essay_coach')
@@ -278,7 +277,7 @@ def compute_overall(rubric, scores):
 
 def current_model():
     """The model a check made now would carry."""
-    return settings.ESSAY_COACH_MODEL if gateway_configured() else LOCAL_MODEL
+    return ai_providers.active_model(settings.ESSAY_COACH_MODEL) if gateway_configured() else LOCAL_MODEL
 
 
 # Supplement prompt kinds. The server, not the model, reads the prompt and picks one with these plain word
@@ -806,22 +805,6 @@ def open_note_count(result, note_states, content):
 # ---------------------------------------------------------------------------
 # Gateway
 
-def _post(body, timeout):
-    request = urllib.request.Request(
-        settings.AI_GATEWAY_URL,
-        data=json.dumps(body).encode('utf-8'),
-        headers={
-            'Authorization': f'Bearer {settings.AI_GATEWAY_API_KEY}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Vercel-AI-App-Name': 'Naseeb Edu',
-        },
-        method='POST',
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode('utf-8'))
-
-
 def _rejects_reasoning(exc):
     """Whether a 400 from the gateway complains about `reasoning_effort`."""
     if exc.code != 400:
@@ -843,7 +826,7 @@ def _call_timeout(deadline):
 def _request_gateway(messages, max_tokens, deadline):
     """One non-streaming JSON-mode call. Pinned model, temperature 0, no fallback model."""
     body = {
-        'model': settings.ESSAY_COACH_MODEL,
+        'model': ai_providers.active_model(settings.ESSAY_COACH_MODEL),
         'messages': messages,
         'response_format': {'type': 'json_object'},
         'temperature': 0,
@@ -854,12 +837,12 @@ def _request_gateway(messages, max_tokens, deadline):
     if effort:
         body['reasoning_effort'] = effort
     try:
-        payload = _post(body, _call_timeout(deadline))
+        payload = ai_providers.chat(body, _call_timeout(deadline))
     except urllib.error.HTTPError as exc:
         if not (effort and _rejects_reasoning(exc)):
             raise
         body.pop('reasoning_effort')
-        payload = _post(body, _call_timeout(deadline))
+        payload = ai_providers.chat(body, _call_timeout(deadline))
     ai_usage.capture(payload, body)
     content_text = payload['choices'][0]['message']['content']
     content_text = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content_text).strip(), flags=re.IGNORECASE)
@@ -867,7 +850,9 @@ def _request_gateway(messages, max_tokens, deadline):
 
 
 def gateway_configured():
-    return outbound_ai_allowed() and bool(settings.AI_GATEWAY_API_KEY)
+    """A real model can be called: outbound AI is on and the active provider (gateway key, or the local
+    Claude CLI in development/test) is ready. Despite the name, this covers both providers."""
+    return outbound_ai_allowed() and ai_providers.configured()
 
 
 _PROVIDER_ERRORS = (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError)
@@ -921,10 +906,10 @@ def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call)
     try:
         validated = validate(_request_gateway(messages, max_tokens, deadline))
     except _PROVIDER_ERRORS:
-        ai_usage.record(spec.feature, user, provider='gateway', status=ai_usage.FAILED)
+        ai_usage.record(spec.feature, user, provider=ai_providers.provider(), status=ai_usage.FAILED)
         logger.warning('%s_provider_failure %s', spec.feature, spec.log_id)
         raise CoachUnavailable()
-    ai_usage.record(spec.feature, user, provider='gateway', status=ai_usage.OK)
+    ai_usage.record(spec.feature, user, provider=ai_providers.provider(), status=ai_usage.OK)
     return validated
 
 

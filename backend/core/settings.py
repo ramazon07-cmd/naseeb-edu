@@ -62,6 +62,10 @@ AI_GATEWAY_URL = config(
     'AI_GATEWAY_URL',
     default='https://ai-gateway.vercel.sh/v1/chat/completions',
 ).strip()
+# Where a check's model call goes. `claude_cli` runs the local Claude CLI for testing without an API key and is
+# refused outside APP_ENV development/test (core/environment.py). See apps/admissions/ai_providers.py.
+AI_PROVIDER = config('AI_PROVIDER', default='gateway').strip().lower()
+AI_TEST_CLI_MODEL = config('AI_TEST_CLI_MODEL', default='sonnet').strip() or 'sonnet'
 AI_ASSISTANT_MODEL = config('AI_ASSISTANT_MODEL', default='openai/gpt-5.4-mini').strip()
 AI_ASSISTANT_FALLBACK_MODEL = config('AI_ASSISTANT_FALLBACK_MODEL', default='openai/gpt-5.4-nano').strip()
 AI_ASSISTANT_MAX_MESSAGES = config('AI_ASSISTANT_MAX_MESSAGES', default=12, cast=int)
@@ -180,6 +184,7 @@ environment_errors = validate_runtime_environment(
     database_url=DATABASE_URL,
     demo_accounts_enabled=DEMO_ACCOUNTS_ENABLED,
     hosted=HOSTED_RUNTIME,
+    ai_provider=AI_PROVIDER,
 )
 if environment_errors:
     message = 'Invalid runtime environment: ' + ' '.join(environment_errors)

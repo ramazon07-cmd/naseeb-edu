@@ -15,12 +15,11 @@ import json
 import logging
 import re
 import urllib.error
-import urllib.request
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 
-from . import ai_usage, letter_coach, letter_sensitive
+from . import ai_providers, ai_usage, letter_coach, letter_sensitive
 from .assistant import redact_pii
 from .essay_lab import coach
 
@@ -250,12 +249,12 @@ def _user_message(student, facts, draft, letter):
 
 
 def gateway_configured():
-    return bool(settings.AI_GATEWAY_API_KEY)
+    return ai_providers.configured()
 
 
 def _request_gateway(system, user):
     body = {
-        'model': settings.AI_ASSISTANT_MODEL,
+        'model': ai_providers.active_model(settings.AI_ASSISTANT_MODEL),
         'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}],
         'response_format': {'type': 'json_object'},
         'temperature': 0.4,
@@ -264,19 +263,7 @@ def _request_gateway(system, user):
     }
     if settings.AI_ASSISTANT_FALLBACK_MODEL:
         body['providerOptions'] = {'gateway': {'models': [settings.AI_ASSISTANT_FALLBACK_MODEL]}}
-    request = urllib.request.Request(
-        settings.AI_GATEWAY_URL,
-        data=json.dumps(body).encode('utf-8'),
-        headers={
-            'Authorization': f'Bearer {settings.AI_GATEWAY_API_KEY}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Vercel-AI-App-Name': 'Naseeb Edu',
-        },
-        method='POST',
-    )
-    with urllib.request.urlopen(request, timeout=settings.AI_ASSISTANT_TIMEOUT_SECONDS) as response:
-        payload = json.loads(response.read().decode('utf-8'))
+    payload = ai_providers.chat(body, settings.AI_ASSISTANT_TIMEOUT_SECONDS)
     ai_usage.capture(payload, body)
     content = payload['choices'][0]['message']['content']
     content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE)

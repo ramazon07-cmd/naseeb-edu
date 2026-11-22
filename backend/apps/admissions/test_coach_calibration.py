@@ -288,6 +288,34 @@ class CalibrateCommandTests(TestCase):
         self.assertIn('doc_danger: score [None, None] expected safety', output)
         self.assertIn('short_list: score [None, None] expected hidden (short)', output)
 
+    def test_provider_flag_prints_provider_and_model_and_writes_a_report(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from django.conf import settings
+        path = Path(tempfile.mkdtemp()) / 'report.json'
+        with override_settings(AI_PROVIDER='gateway', AI_GATEWAY_API_KEY='', APP_ENV='test', AI_TEST_CLI_MODEL='sonnet'), \
+                mock.patch('apps.admissions.ai_providers.shutil.which', return_value='/bin/claude'):
+            output, error, _ = self.run_command('--runs', '1', '--provider', 'claude_cli', '--set', 'supplement',
+                                                '--report', str(path))
+            self.assertEqual(settings.AI_PROVIDER, 'gateway')  # the flag is for this run only
+        self.assertIsNone(error)
+        self.assertIn('supplement (provider claude_cli, model sonnet, 1 runs)', output)
+        report = json.loads(path.read_text())
+        self.assertEqual((report['provider'], report['model'], report['runs']), ('claude_cli', 'claude-cli/sonnet', 1))
+        self.assertIn('doc_scholarship_hardship', report['sets']['supplement'])
+        self.assertEqual(report['sets']['supplement']['doc_scholarship_hardship']['problems'], [])
+
+    def test_the_header_names_the_gateway_by_default(self):
+        output, _, _ = self.run_command('--runs', '1', '--set', 'supplement')
+        self.assertIn(f'supplement (provider gateway, model {coach.settings.ESSAY_COACH_MODEL}, 1 runs)', output)
+
+    @override_settings(APP_ENV='production')
+    def test_the_cli_provider_is_refused_in_production(self):
+        _, error, calls = self.run_command('--runs', '1', '--provider', 'claude_cli')
+        self.assertIn('development or test', str(error))
+        self.assertEqual(calls, [])
+
     def test_each_text_runs_with_its_own_type_prompt_and_limit(self):
         _, error, calls = self.run_command('--runs', '1', '--set', 'supplement', '--text', 'doc_scholarship_hardship')
         self.assertIsNone(error)

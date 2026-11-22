@@ -21,6 +21,12 @@ supplement specialist, counselor); the owner's open questions were decided on 20
   `honors_description.md`, `topics.md`) are not loaded by the server and not in the product.
 - On the roadmap: a UCAS (UK) personal statement type.
 
+**Calibration only counts for the model it ran on.** `coach_calibrate --provider claude_cli` (Claude CLI,
+Sonnet, local testing only, `AI_PROVIDER` / `AI_TEST_CLI_MODEL`, refused outside APP_ENV development or test)
+is a way to test the rubrics without an API key. A pass on Sonnet does NOT unlock production scores
+(`ESSAY_COACH_SCORED_RUBRICS`) while production uses a different model: re-run the sets with the production
+provider and model first. The command prints the provider and model in every header and `--report` records them.
+
 ## Rules for every type
 
 1. **Naseeb AI asks; it never writes.** No rewritten sentences, no suggested wording, no sentence

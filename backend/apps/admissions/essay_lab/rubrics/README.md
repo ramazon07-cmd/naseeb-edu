@@ -38,6 +38,8 @@ fills one rubric at a time after `manage.py coach_calibrate --set <name>` passes
 See `calibration/README.md`. `calibration/<rubric>/<id>.txt` plus `expected.json`. Tests check the files;
 `manage.py coach_calibrate` runs them against the real gateway: scores inside the range, at most one level of
 drift over 5 runs, adversarial texts at most 3, grammar-fixed and translated copies within one level.
+Calibration only counts for the model it ran on: a pass with `--provider claude_cli` (Sonnet, local testing)
+does NOT unlock production scores while production uses a different model.
 
 ## Decisions (owner)
 
