@@ -73,16 +73,31 @@ export function expectedDuration(store) {
   return expectedFromHistory(readDurations(store))
 }
 
-// Tracks the one pending check outside any component, so hiding the panel or
-// entering focus mode neither restarts the bar nor records a bogus duration.
+// Tracks pending checks outside any component, so hiding the panel or entering
+// focus mode neither restarts the bar nor records a bogus duration. Entries are
+// keyed (essay/session) and guarded by an ownership token: a stale request can
+// never consume or clear a newer check's entry.
 export function createCheckTimer({ now = () => Date.now(), store } = {}) {
-  let pending = null
+  const pending = new Map()
+  let counter = 0
   return {
-    start() { pending = { startedAt: now(), expected: expectedDuration(store) } },
-    // Only a successful response is a real duration.
-    succeed() { if (pending) recordDuration(now() - pending.startedAt, store); pending = null },
-    fail() { pending = null },
-    state() { return pending },
+    start(key) {
+      counter += 1
+      const token = counter
+      pending.set(key, { token, startedAt: now(), expected: expectedDuration(store) })
+      return token
+    },
+    // Only a successful response from the entry's current owner is a real duration.
+    succeed(key, token) {
+      const entry = pending.get(key)
+      if (!entry || entry.token !== token) return
+      recordDuration(now() - entry.startedAt, store)
+      pending.delete(key)
+    },
+    fail(key, token) {
+      if (pending.get(key)?.token === token) pending.delete(key)
+    },
+    state(key) { return pending.get(key) || null },
   }
 }
 

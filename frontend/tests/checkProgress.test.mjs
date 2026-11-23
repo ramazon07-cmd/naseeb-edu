@@ -61,25 +61,57 @@ test('timer keeps its start across observers and records only on success', () =>
   const store = memory();
   let clock = 1000;
   const timer = createCheckTimer({ now: () => clock, store });
-  assert.equal(timer.state(), null);
-  timer.start();
+  assert.equal(timer.state('a'), null);
+  const token = timer.start('a');
   clock += 5000;
-  assert.equal(timer.state().startedAt, 1000, 'reading state does not restart or record');
+  assert.equal(timer.state('a').startedAt, 1000, 'reading state does not restart or record');
   assert.deepEqual(readDurations(store), []);
   clock += 25000;
-  timer.succeed();
+  timer.succeed('a', token);
   assert.deepEqual(readDurations(store), [30000]);
-  assert.equal(timer.state(), null);
+  assert.equal(timer.state('a'), null);
 });
 
 test('a failed check records nothing', () => {
   const store = memory();
   let clock = 0;
   const timer = createCheckTimer({ now: () => clock, store });
-  timer.start();
+  const token = timer.start('a');
   clock = 40000;
-  timer.fail();
-  timer.succeed();
+  timer.fail('a', token);
+  timer.succeed('a', token);
+  assert.deepEqual(readDurations(store), []);
+});
+
+test('an older check cannot consume or clear a newer one', () => {
+  const store = memory();
+  let clock = 0;
+  const timer = createCheckTimer({ now: () => clock, store });
+  const a = timer.start('essay-1');
+  clock = 20000;
+  const b = timer.start('essay-2');
+  clock = 30000;
+  timer.succeed('essay-1', a);
+  assert.deepEqual(readDurations(store), [30000], 'A records its own 30s');
+  assert.equal(timer.state('essay-2').startedAt, 20000, 'B is untouched');
+  timer.fail('essay-1', a);
+  assert.ok(timer.state('essay-2'));
+  clock = 60000;
+  timer.succeed('essay-2', b);
+  assert.deepEqual(readDurations(store), [30000, 40000], 'B records its own 40s');
+});
+
+test('a stale request for the same essay does not touch a restarted check', () => {
+  const store = memory();
+  let clock = 0;
+  const timer = createCheckTimer({ now: () => clock, store });
+  const old = timer.start('essay-1');
+  clock = 10000;
+  const fresh = timer.start('essay-1');
+  clock = 12000;
+  timer.fail('essay-1', old);
+  timer.succeed('essay-1', old);
+  assert.equal(timer.state('essay-1').token, fresh);
   assert.deepEqual(readDurations(store), []);
 });
 

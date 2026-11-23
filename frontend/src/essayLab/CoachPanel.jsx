@@ -70,7 +70,7 @@ function noteCount(n) {
 // Coach panel: sticky header (score), tabs, scrollable content and a sticky footer
 // with the one "Check again" button. Notes only count while their quote can be found.
 function CoachPanel({
-  check, status, anchored, activeId, states, changed, inputChanged, notice, words,
+  timerKey, check, status, anchored, activeId, states, changed, inputChanged, notice, words,
   onCheck, onJump, onSetState, onClose,
 }) {
   const [tab, setTab] = useState('overview')
@@ -178,7 +178,7 @@ function CoachPanel({
     </div>}
 
     <div className="el-coach-body" ref={bodyRef} id="el-coach-panel" role={model ? 'tabpanel' : undefined} aria-labelledby={model ? `el-tab-${tab}` : undefined}>
-      <CheckProgress active={Boolean(status.loading)} failed={Boolean(status.error)} />
+      <CheckProgress timerKey={timerKey} active={Boolean(status.loading)} failed={Boolean(status.error)} />
       {status.loading && <div className="el-coach-loading" aria-hidden="true">
         <span className="el-shimmer is-big" /><span className="el-shimmer" /><span className="el-shimmer is-short" />
       </div>}

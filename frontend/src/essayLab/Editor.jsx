@@ -727,7 +727,8 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
   const runCheck = useCallback(async () => {
-    checkTimer.start()
+    const timerKey = `${essay.id}:${session.id}`
+    const timerToken = checkTimer.start(timerKey)
     setCheckStatus({ loading: true, error: null })
     setCoachNotice(null)
     setPanel('coach')
@@ -742,7 +743,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
           if (error?.status !== 409 || attempt === 1 || serverNotice(error)) throw error
         }
       }
-      checkTimer.succeed()
+      checkTimer.succeed(timerKey, timerToken)
       setCheck(result)
       setNoteStates(result.note_states || {})
       setCurrentInputHash(result.current_input_hash || null)
@@ -756,7 +757,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
         setHistoryVersion((value) => value + 1) // the check made a checkpoint
       }
     } catch (error) {
-      checkTimer.fail()
+      checkTimer.fail(timerKey, timerToken)
       if (serverNotice(error) === 'notes_open') {
         // Show the server's view of the notes instead of a dead end (one GET).
         goneSent.current.clear()
@@ -1129,7 +1130,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
     {panel === 'comments' && !focusMode && <CommentsPanel readOnly={(feedback.status ?? essay.status) === 'approved'} items={items} activeKey={activeItem ? `${activeItem.kind}:${activeItem.id}` : null}
       busyKey={feedbackBusy} acceptAll={allIds} loaded={feedback.loaded} error={feedback.error}
       onSelect={selectItem} onDecide={decide} onReply={replyToThread} onRetry={() => poller.current?.poke()} onClose={closeComments} />}
-    {panel === 'coach' && !focusMode && <CoachPanel check={check} status={checkStatus} anchored={anchored} activeId={activeNoteId} states={noteStates}
+    {panel === 'coach' && !focusMode && <CoachPanel timerKey={`${essay.id}:${session.id}`} check={check} status={checkStatus} anchored={anchored} activeId={activeNoteId} states={noteStates}
       changed={textChanged} inputChanged={inputChanged} notice={coachNotice} words={tabWords}
       onCheck={runCheck} onJump={jumpToNote} onSetState={setNoteState} onClose={closePanel} />}
   </>

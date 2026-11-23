@@ -9,7 +9,7 @@ const FINISH_MS = 450
 // elapsed time, never by extra requests. The start time lives in checkTimer (set
 // where the request starts), so hiding and reopening the panel resumes the bar.
 // When the check ends without `failed`, the bar fills to 100% briefly and goes away.
-export default function CheckProgress({ active, failed = false }) {
+export default function CheckProgress({ timerKey, active, failed = false }) {
   const [now, setNow] = useState(() => Date.now())
   const [finishing, setFinishing] = useState(false)
   const fallbackStart = useRef(Date.now())
@@ -35,7 +35,7 @@ export default function CheckProgress({ active, failed = false }) {
 
   if (!active && !(finishing && !failed)) return null
 
-  const pending = checkTimer.state()
+  const pending = checkTimer.state(timerKey)
   const startedAt = pending?.startedAt ?? fallbackStart.current
   const total = pending?.expected || DEFAULT_EXPECTED_MS
   const elapsed = Math.max(0, now - startedAt)
