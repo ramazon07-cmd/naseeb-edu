@@ -297,6 +297,73 @@ class ImportOfficialProgramsTests(APITestCase):
             self.assertIn(name, body)
 
 
+class ImportProgramDetailsTests(APITestCase):
+    def setUp(self):
+        self.program = OpportunityProgram.objects.create(title='The Earth Prize', provider='The Earth Prize', program_type='international', category='Competition')
+
+    def detail(self, **values):
+        return {
+            'id': self.program.pk, 'overview': 'A global sustainability competition for teams of up to 5.', 'team': 'Teams of up to 5',
+            'benefits': ['7 regional winning teams get $10,000 each', '', None, '1:1 mentoring'], 'who_can_apply': ['Ages 13-19'],
+            'requirements': ['A sustainability project'], 'selection_process': 'Regional judging, then a final.', 'country': 'Switzerland', 'age_range': '13-19',
+            'past_participants_uz': [], **values,
+        }
+
+    def load(self, *rows):
+        return run('import_official_programs', write([{'id': self.program.pk, 'official_url': None}]), details=write(list(rows)))
+
+    def test_details_are_stored_cleaned_and_a_second_run_changes_nothing(self):
+        self.load(self.detail())
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.benefits, ['7 regional winning teams get $10,000 each', '1:1 mentoring'])
+        self.assertEqual((self.program.team_format, self.program.country, self.program.eligible_ages), ('Teams of up to 5', 'Switzerland', '13-19'))
+        self.assertEqual((self.program.who_can_apply, self.program.requirements_list), (['Ages 13-19'], ['A sustainability project']))
+        self.assertIn('1 unchanged', self.load(self.detail()))
+
+    def test_null_or_empty_details_never_overwrite_and_existing_country_is_kept(self):
+        OpportunityProgram.objects.filter(pk=self.program.pk).update(country='Germany', benefits=['Old benefit'])
+        self.load(self.detail(benefits=[], overview=None, country='Switzerland'))
+        self.program.refresh_from_db()
+        self.assertEqual((self.program.country, self.program.benefits), ('Germany', ['Old benefit']))
+
+    def test_past_participants_need_a_name_and_a_source_and_linkedin_must_be_a_profile(self):
+        good = {'name': 'Aziz Karimov', 'role': 'winner', 'year': 2024, 'linkedin_url': 'https://www.linkedin.com/in/aziz-karimov/', 'source_url': 'https://example.org/winners'}
+        self.load(self.detail(past_participants_uz=[
+            good,
+            {'name': 'Search Only', 'role': 'participant', 'year': 2023, 'linkedin_url': 'https://www.linkedin.com/search/results/people/?keywords=x', 'source_url': 'https://example.org/p'},
+            {'name': 'No Source', 'role': 'winner', 'year': 2023, 'linkedin_url': None, 'source_url': None},
+            {'name': 'Aziz Karimov', 'source_url': 'https://example.org/dup'},
+            {'role': 'winner', 'source_url': 'https://example.org/x'},
+            *[{'name': f'Person {n}', 'source_url': 'https://example.org/p'} for n in range(8)],
+        ]))
+        self.program.refresh_from_db()
+        people = self.program.past_participants
+        self.assertEqual(len(people), 5)
+        self.assertEqual(people[0], good)
+        self.assertIsNone(people[1]['linkedin_url'])
+        self.assertNotIn('No Source', [person['name'] for person in people])
+
+    def test_a_named_program_file_skips_the_shipped_details(self):
+        run('import_official_programs', write([{'id': self.program.pk, 'official_url': None}]))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.benefits, [])
+
+    def test_the_shipped_details_file_is_well_formed(self):
+        from apps.admissions.management.commands.import_official_programs import DETAILS_FILE, people
+        rows = json.loads(DETAILS_FILE.read_text(encoding='utf-8'))
+        self.assertTrue(rows)
+        for row in rows:
+            for person in row.get('past_participants_uz') or []:
+                self.assertTrue(person.get('source_url'), row['id'])
+            self.assertLessEqual(len(people(row.get('past_participants_uz')) or []), 5)
+
+    def test_the_serializer_exposes_the_detail_fields(self):
+        from apps.admissions.serializers import OpportunityProgramSerializer
+        body = OpportunityProgramSerializer(self.program).data
+        for name in ('overview', 'benefits', 'who_can_apply', 'requirements_list', 'team_format', 'selection_process', 'past_participants'):
+            self.assertIn(name, body)
+
+
 class OfficialAidMatchTests(MatchFixture, APITestCase):
     def match(self):
         response = self.client.post(URL)

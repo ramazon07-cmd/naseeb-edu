@@ -4,7 +4,12 @@
 
 Rows are matched by id. Placeholder rows and ids that do not exist are skipped and reported. A value that
 is null or empty in the file never overwrites what the database already has, and running the same file twice
-changes nothing. No participant or winner names are read: only the fields below.
+changes nothing.
+
+The richer details (programs_details.json: overview, benefits, who can apply, requirements, selection and up to
+five public past participants from Uzbekistan) load in the same run when no file is named, or from `--details FILE`.
+A participant is kept only with a name and a public source link; a LinkedIn link only if it is a profile
+(linkedin.com/in/...). Nothing else about a person is read.
 """
 import json
 import re
@@ -24,6 +29,9 @@ DELIVERY = {'onsite', 'online', 'hybrid'}
 DEFAULT_FILE = Path(__file__).resolve().parents[2] / 'catalog_data' / 'official_research' / 'programs.json'
 # Aggregators, forms and social pages are never an official source.
 BLOCKED_HOSTS = ('opportunitiescorners', 'scholarshipscorner', 'opportunitydesk', 'docs.google', 'forms.gle', 'airtable', 'instagram', 'facebook')
+DETAILS_FILE = DEFAULT_FILE.with_name('programs_details.json')
+LINKEDIN_PROFILE = re.compile(r'^https://([a-z]{2,3}\.)?linkedin\.com/in/[^/?#\s]+/?$', re.I)
+MAX_PEOPLE = 5
 url_check = URLValidator(schemes=['http', 'https'])
 
 
@@ -127,12 +135,69 @@ def changes_for(row):
     return values
 
 
+def text_list(value, limit=6, size=240):
+    if not isinstance(value, list):
+        return None
+    items = [text(item, size) for item in value if isinstance(item, str)]
+    return [item for item in items if item][:limit] or None
+
+
+def people(value):
+    """Up to five {name, role, year, linkedin_url, source_url}; each needs a name and a working source link."""
+    if not isinstance(value, list):
+        return None
+    kept, seen = [], set()
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+        name, source = text(entry.get('name'), 120), link(entry.get('source_url'))
+        if not name or not source or name.lower() in seen:
+            continue
+        profile = link(entry.get('linkedin_url'), 300)
+        year = entry.get('year')
+        seen.add(name.lower())
+        kept.append({
+            'name': name, 'role': text(entry.get('role'), 60) or '',
+            'year': year if isinstance(year, int) and not isinstance(year, bool) and 1990 <= year <= 2100 else None,
+            'linkedin_url': profile if profile and LINKEDIN_PROFILE.match(profile) else None,
+            'source_url': source,
+        })
+    return kept[:MAX_PEOPLE] or None
+
+
+def detail_changes_for(row):
+    """The detail fields a programs_details.json row states. Empty or null values are left out."""
+    values = {
+        'overview': text(row.get('overview'), 1200),
+        'team_format': text(row.get('team'), 160),
+        'selection_process': text(row.get('selection_process'), 1500),
+        'benefits': text_list(row.get('benefits'), 10),
+        'who_can_apply': text_list(row.get('who_can_apply'), 8),
+        'requirements_list': text_list(row.get('requirements'), 8),
+        'past_participants': people(row.get('past_participants_uz')),
+    }
+    return {name: value for name, value in values.items() if value is not None}
+
+
 class Command(BaseCommand):
     help = 'Import official-site program details into OpportunityProgram by id (idempotent).'
 
     def add_arguments(self, parser):
         parser.add_argument('file', nargs='?', default=str(DEFAULT_FILE), help='Default: the research file shipped in catalog_data/official_research.')
+        parser.add_argument('--details', default=None, help='Details file (programs_details.json). Default: the shipped one, only when no program file is named.')
         parser.add_argument('--dry-run', action='store_true', help='Report what would change and write nothing.')
+
+    def read_details(self, options):
+        path = options['details'] or (str(DETAILS_FILE) if options['file'] == str(DEFAULT_FILE) else None)
+        if not path:
+            return {}
+        try:
+            rows = json.loads(Path(path).read_text(encoding='utf-8'))
+        except (OSError, ValueError) as error:
+            raise CommandError(f'{path}: {error}')
+        if not isinstance(rows, list):
+            raise CommandError('expected a JSON array in the details file')
+        return {row['id']: row for row in rows if isinstance(row, dict) and isinstance(row.get('id'), int)}
 
     def handle(self, *args, **options):
         try:
@@ -141,6 +206,7 @@ class Command(BaseCommand):
             raise CommandError(f"{options['file']}: {error}")
         if not isinstance(rows, list):
             raise CommandError('expected a JSON array')
+        details = self.read_details(options)
         programs = OpportunityProgram.objects.in_bulk()
         totals = {'rows': 0, 'updated': 0, 'unchanged': 0, 'placeholder': 0, 'missing': 0, 'no_official_data': 0}
         missing = []
@@ -157,6 +223,12 @@ class Command(BaseCommand):
                 missing.append(str(row['id']))
                 continue
             values = changes_for(row)
+            detail = details.get(row['id'], {})
+            values.update(detail_changes_for(detail))
+            # Facts the catalog row lacks are filled from the details; an existing value is never replaced.
+            for name, found in (('country', text(detail.get('country'), 120)), ('eligible_ages', text(detail.get('age_range'), 160))):
+                if found and not values.get(name) and not getattr(program, name):
+                    values[name] = found
             if not values:
                 totals['no_official_data'] += 1
                 continue
