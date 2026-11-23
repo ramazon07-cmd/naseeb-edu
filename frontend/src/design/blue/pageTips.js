@@ -1,4 +1,4 @@
-import { t } from '../../i18n';
+import { t } from '../../i18n.js';
 
 // First-visit page tips: frontend only, per account, no requests.
 //   naseeb-page-tips-v1:<userId>      JSON { "<page key>": 1 } pages whose tips were shown
@@ -17,8 +17,10 @@ export function setPageTipsOff(userId, off) {
 function seenMap(userId) {
   try { const value = JSON.parse(read(`${PAGE_TIPS_KEY}:${userId}`) || '{}'); return value && typeof value === 'object' ? value : {}; } catch { return {}; }
 }
-export function pageTipsSeen(userId, page) { return seenMap(userId)[page] === 1; }
-export function markPageTipsSeen(userId, page) { write(`${PAGE_TIPS_KEY}:${userId}`, JSON.stringify({ ...seenMap(userId), [page]: 1 })); }
+// Also kept in memory for this page load, so storage that refuses writes does not replay the tips.
+const seenNow = new Set();
+export function pageTipsSeen(userId, page) { return seenNow.has(`${userId}:${page}`) || seenMap(userId)[page] === 1; }
+export function markPageTipsSeen(userId, page) { seenNow.add(`${userId}:${page}`); write(`${PAGE_TIPS_KEY}:${userId}`, JSON.stringify({ ...seenMap(userId), [page]: 1 })); }
 
 // Tips per page key. `target` may list several selectors; a tip whose target is not on screen is
 // left out. The locked Roadmap is not covered. Meetings and Essay Lab targets come from their own pages; a tip whose target is absent is dropped.

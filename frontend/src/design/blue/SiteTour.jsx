@@ -46,6 +46,7 @@ export function SiteTour({ userId, active, onClose, setPage, openDrawer, pageSte
   const targetRef = useRef(null);
   const returnFocus = useRef(null);
   const closing = useRef(false);
+  const recorded = useRef(false);
 
   const finish = useCallback(() => {
     if (closing.current) return;
@@ -62,6 +63,7 @@ export function SiteTour({ userId, active, onClose, setPage, openDrawer, pageSte
   useEffect(() => {
     if (!active) return undefined;
     closing.current = false;
+    recorded.current = false;
     returnFocus.current = document.activeElement;
     if (!pageSteps) setPage('dashboard');
     setIndex(0);
@@ -85,6 +87,14 @@ export function SiteTour({ userId, active, onClose, setPage, openDrawer, pageSte
   }, [active, setPage, pageSteps, onClose]);
 
   const step = steps[index];
+
+  // "Seen" is recorded the moment the tour is on screen, not when it is finished: leaving the
+  // page, reloading or closing the tab mid-tour must not bring it back on the next visit.
+  useEffect(() => {
+    if (!active || !step || recorded.current) return;
+    recorded.current = true;
+    if (onFinish) onFinish(); else markSiteTourSeen(userId);
+  }, [active, step, userId, onFinish]);
 
   const place = useCallback(() => {
     const target = targetRef.current;

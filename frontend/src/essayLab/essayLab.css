@@ -4951,6 +4951,10 @@ span.el-tab-caret {
 .essay-lab .el-streak {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   gap: 10px;
   padding: 14px;
   background: var(--el-surface);
@@ -5054,6 +5058,8 @@ span.el-tab-caret {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
+  min-width: 0;
 }
 
 .essay-lab .el-streak-cal[aria-busy='true'] {
@@ -5062,11 +5068,16 @@ span.el-tab-caret {
 
 .essay-lab .el-streak-row {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  /* minmax(0, 1fr): equal columns that never grow with their content, so the rows and the
+     weekday header always line up and fit the card. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
+  width: 100%;
+  min-width: 0;
 }
 
 .essay-lab .el-streak-wd {
+  min-width: 0;
   text-align: center;
   font-size: var(--text-xs);
   font-weight: 700;
@@ -5076,6 +5087,9 @@ span.el-tab-caret {
 }
 
 .essay-lab .el-streak-d {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
   aspect-ratio: 1;
   border-radius: 8px;
   display: flex;
@@ -5092,8 +5106,10 @@ span.el-tab-caret {
 }
 
 .essay-lab .el-streak-d svg {
-  width: 16px;
-  height: 18px;
+  width: min(16px, 52%);
+  height: auto;
+  aspect-ratio: 16 / 18;
+  flex: none;
   display: block;
 }
 
