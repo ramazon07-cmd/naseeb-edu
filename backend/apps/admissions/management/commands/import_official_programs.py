@@ -152,7 +152,8 @@ def edition_changes_for(detail):
         values['delivery_mode'] = core['delivery_mode']
     if 'application_url' in core:
         apply_url = link(core['application_url'])
-        values['application_url'] = apply_url if apply_url and official(apply_url) else ''
+        # An apply page is often a form host (Airtable, Google Forms, Typeform); only evidence sources must be official.
+        values['application_url'] = apply_url if apply_url and apply_url.lower().startswith('https://') else ''
     if text(core.get('title'), 220):
         values['title'] = text(core.get('title'), 220)
     sources = [item for item in (link(entry) for entry in core.get('sources') or [] if isinstance(entry, str)) if item and official(item)]

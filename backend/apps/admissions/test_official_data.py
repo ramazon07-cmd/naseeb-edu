@@ -378,6 +378,15 @@ class ImportProgramDetailsTests(APITestCase):
         self.assertEqual((self.program.fee_usd, self.program.fee_text, self.program.delivery_mode), (695, '$695 tuition', 'online'))
         self.assertEqual((self.program.city, self.program.application_url), ('', 'https://example.org/winter'))
 
+    def test_an_edition_apply_link_may_be_a_form_host_but_sources_stay_official_and_https_is_required(self):
+        self.load(self.detail(edition_core={'application_url': 'https://airtable.com/appX/shrY', 'sources': ['https://airtable.com/appX/shrY', 'https://example.org/program']}))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.application_url, 'https://airtable.com/appX/shrY')
+        self.assertEqual(self.program.official_sources, ['https://example.org/program'])
+        self.load(self.detail(edition_core={'application_url': 'http://example.org/insecure'}))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.application_url, '')
+
     def test_the_details_deadline_is_used_when_nothing_else_has_one(self):
         self.load(self.detail(deadline='2026-12-16'))
         self.program.refresh_from_db()
