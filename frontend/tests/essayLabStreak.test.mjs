@@ -92,3 +92,13 @@ test('only a complete streak answer is accepted', () => {
   assert.equal(isValidStreak({ ...good, goal: null }), false);
   assert.equal(isValidStreak([]), false);
 });
+
+test('calendar weeks always have exactly 7 cells, Sun column included', () => {
+  const weeks = buildMonth('2026-11', { '2026-11-20': 'ember', '2026-11-21': 'fire' }, '2026-11-23');
+  for (const week of weeks) assert.equal(week.length, 7);
+  assert.equal(weeks[0][6].day, 1); // 1 Nov 2026 is a Sunday
+  assert.equal(weeks[3][4].state, 'ember');
+  assert.equal(weeks[3][5].state, 'fire');
+  assert.equal(weeks[3][6].day, 22);
+  assert.equal(weeks[4][0].isToday, true);
+});
