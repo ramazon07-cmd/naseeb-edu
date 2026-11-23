@@ -1,6 +1,6 @@
 """Load researched, official-site aid data for international undergraduates (financial_aid/universities_N.json).
 
-    python manage.py import_official_aid file1.json [file2.json ...] [--dry-run]
+    python manage.py import_official_aid [file1.json ...] [--dry-run]   (no files: the shipped research data)
 
 Rows are matched to an existing University by name and country (case-insensitive); a row without a match is
 reported and never creates a university. A value that is null or "unknown" in the file never overwrites what
@@ -10,6 +10,7 @@ import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import urlparse
 
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
@@ -21,6 +22,7 @@ from apps.admissions.models import University
 
 AVAILABILITY = {choice.value for choice in University.IntlAidAvailability}
 POLICIES = {choice.value for choice in University.IntlNeedPolicy}
+DEFAULT_FILES = sorted((Path(__file__).resolve().parents[2] / 'catalog_data' / 'official_research').glob('universities_*.json'))
 url_check = URLValidator(schemes=['http', 'https'])
 
 
@@ -31,6 +33,13 @@ def clean_url(value):
     except ValidationError:
         return ''
     return value if len(value) <= 500 else ''
+
+
+def on_domain(url, domain):
+    """Whether ``url`` is on ``domain`` or one of its subdomains. No domain means nothing can be vouched for."""
+    domain = domain.strip().lower().lstrip('.') if isinstance(domain, str) else ''
+    host = (urlparse(url).hostname or '').lower()
+    return bool(domain) and (host == domain or host.endswith('.' + domain))
 
 
 def amount(value):
@@ -97,7 +106,7 @@ def changes_for(row):
     if isinstance(row.get('notes'), str) and row['notes'].strip():
         values['aid_application_notes'] = row['notes'].strip()
     sources = [clean_url(item) for item in row.get('sources') or [] if isinstance(item, str)]
-    sources = [item for item in sources if item]
+    sources = [item for item in sources if item and on_domain(item, row.get('official_domain'))]
     if sources:
         values['aid_sources'] = sources
     verified = parse_date(row.get('verified_at'))
@@ -119,7 +128,7 @@ class Command(BaseCommand):
     help = 'Import official-site financial aid data for international undergraduates (idempotent).'
 
     def add_arguments(self, parser):
-        parser.add_argument('files', nargs='+')
+        parser.add_argument('files', nargs='*', help='Default: the research files shipped in catalog_data/official_research.')
         parser.add_argument('--dry-run', action='store_true', help='Report what would change and write nothing.')
 
     def handle(self, *args, **options):
@@ -128,7 +137,7 @@ class Command(BaseCommand):
             index[(university.name.strip().lower(), university.country.strip().lower())] = university
         totals = {'rows': 0, 'updated': 0, 'unchanged': 0, 'unmatched': 0, 'no_currency_rate': 0}
         unmatched = []
-        for path in options['files']:
+        for path in options['files'] or map(str, DEFAULT_FILES):
             try:
                 rows = json.loads(Path(path).read_text(encoding='utf-8'))
             except (OSError, ValueError) as error:

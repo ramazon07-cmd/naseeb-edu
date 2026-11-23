@@ -53,7 +53,7 @@ class ImportOfficialAidTests(APITestCase):
     def test_a_row_is_saved_and_converted_to_usd(self):
         path = write([self.row(
             intl_aid_available='limited', intl_need_policy='need_aware', merit_for_intl=True, need_based_for_intl=False,
-            currency='GBP', max_award=10000, typical_award=5000, min_student_pays=20000, academic_year='2026-27',
+            official_domain='example.ac.uk', currency='GBP', max_award=10000, typical_award=5000, min_student_pays=20000, academic_year='2026-27',
             aid_url='https://example.ac.uk/aid', notes='Merit awards up to 10,000 GBP.', sources=['https://example.ac.uk/aid', 'not a url'],
         )])
         output = run('import_official_aid', path)
@@ -112,6 +112,26 @@ class ImportOfficialAidTests(APITestCase):
         self.uni.refresh_from_db()
         self.assertEqual(self.uni.intl_aid_availability, 'no')
         self.assertFalse(self.uni.offers_international_aid)
+
+    def test_only_sources_on_the_official_domain_are_kept(self):
+        row = self.row(official_domain='example.ac.uk', intl_aid_available='yes', sources=[
+            'https://example.ac.uk/aid', 'https://study.example.ac.uk/fees', 'https://notexample.ac.uk/x', 'https://aggregator.com/example.ac.uk',
+        ])
+        run('import_official_aid', write([row]))
+        self.uni.refresh_from_db()
+        self.assertEqual(self.uni.aid_sources, ['https://example.ac.uk/aid', 'https://study.example.ac.uk/fees'])
+
+    def test_unlisted_currencies_and_volatile_ones_are_not_converted(self):
+        for code in ('unknown', 'ARS', 'VES'):
+            self.assertIsNone(aid_fx.to_usd(100, code))
+        for code in ('COP', 'MOP', 'OMR', 'BAM', 'UAH', 'PAB'):
+            self.assertIsNotNone(aid_fx.to_usd(100000, code), code)
+
+    def test_without_a_path_the_shipped_research_files_load(self):
+        from apps.admissions.management.commands.import_official_aid import DEFAULT_FILES
+        self.assertEqual(len(DEFAULT_FILES), 8)
+        output = run('import_official_aid', dry_run=True)
+        self.assertIn('1504 rows', output)
 
     def test_dry_run_writes_nothing(self):
         output = run('import_official_aid', write([self.row(intl_aid_available='yes')]), dry_run=True)
@@ -186,6 +206,19 @@ class ImportOfficialProgramsTests(APITestCase):
         run('import_official_programs', write([self.row(still_running=None)]))
         self.program.refresh_from_db()
         self.assertFalse(self.program.is_active)
+
+    def test_existing_title_and_provider_are_kept_and_aggregator_sources_dropped(self):
+        run('import_official_programs', write([self.row(
+            title='Official Name', provider='Official Org', application_url='https://forms.gle/abc',
+            sources=['https://opportunitiescorners.com/x', 'https://docs.google.com/spreadsheets/1', 'https://cddrl.example.edu/summerfellows'],
+        )]))
+        self.program.refresh_from_db()
+        self.assertEqual((self.program.title, self.program.provider), ('Old title', 'opportunitiescorners.com'))
+        self.assertEqual(self.program.official_sources, ['https://cddrl.example.edu/summerfellows'])
+        self.assertEqual(self.program.application_url, '')
+
+    def test_without_a_path_the_shipped_research_file_loads(self):
+        self.assertIn('rows', run('import_official_programs', dry_run=True))
 
     def test_placeholders_and_unknown_ids_are_skipped_and_a_row_without_official_data_keeps_needs_verification(self):
         before = OpportunityProgram.objects.count()

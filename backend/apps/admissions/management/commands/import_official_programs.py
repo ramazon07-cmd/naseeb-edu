@@ -1,6 +1,6 @@
 """Load researched, official-site program details (programs/programs.json) into OpportunityProgram rows.
 
-    python manage.py import_official_programs programs.json [--dry-run]
+    python manage.py import_official_programs [programs.json] [--dry-run]   (no file: the shipped research data)
 
 Rows are matched by id. Placeholder rows and ids that do not exist are skipped and reported. A value that
 is null or empty in the file never overwrites what the database already has, and running the same file twice
@@ -9,6 +9,7 @@ changes nothing. No participant or winner names are read: only the fields below.
 import json
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlparse
 
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
@@ -19,6 +20,9 @@ from apps.admissions.models import OpportunityProgram
 
 PROGRAM_TYPES = {'national', 'international'}
 DELIVERY = {'onsite', 'online', 'hybrid'}
+DEFAULT_FILE = Path(__file__).resolve().parents[2] / 'catalog_data' / 'official_research' / 'programs.json'
+# Aggregators, forms and social pages are never an official source.
+BLOCKED_HOSTS = ('opportunitiescorners', 'scholarshipscorner', 'opportunitydesk', 'docs.google', 'forms.gle', 'airtable', 'instagram', 'facebook')
 url_check = URLValidator(schemes=['http', 'https'])
 
 
@@ -37,6 +41,11 @@ def link(value, limit=1000):
     return value
 
 
+def official(url):
+    host = (urlparse(url or '').hostname or '').lower()
+    return bool(host) and not any(blocked in host for blocked in BLOCKED_HOSTS)
+
+
 def day(value):
     try:
         return date.fromisoformat(value) if isinstance(value, str) else None
@@ -51,7 +60,6 @@ def whole(value):
 def changes_for(row):
     """The OpportunityProgram field values this row states (only the ones it actually knows)."""
     values = {
-        'title': text(row.get('title'), 220), 'provider': text(row.get('provider'), 180),
         'description': text(row.get('description'), 5000),
         'category': text(row.get('category'), 100),
         'country': text(row.get('country'), 120), 'city': text(row.get('city'), 120),
@@ -67,8 +75,11 @@ def changes_for(row):
     }
     for name in ('scholarship_available', 'open_to_international', 'open_to_uzbekistan'):
         values[name] = row[name] if isinstance(row.get(name), bool) else None
-    sources = [item for item in (link(entry) for entry in row.get('sources') or [] if isinstance(entry, str)) if item]
+    sources = [item for item in (link(entry) for entry in row.get('sources') or [] if isinstance(entry, str)) if item and official(item)]
     values['official_sources'] = sources or None
+    for name in ('application_url', 'source_url'):
+        if values[name] and not official(values[name]):
+            values[name] = None
     values = {name: value for name, value in values.items() if value is not None}
     if values.get('source_url') or sources:
         values['needs_verification'] = False
@@ -82,7 +93,7 @@ class Command(BaseCommand):
     help = 'Import official-site program details into OpportunityProgram by id (idempotent).'
 
     def add_arguments(self, parser):
-        parser.add_argument('file')
+        parser.add_argument('file', nargs='?', default=str(DEFAULT_FILE), help='Default: the research file shipped in catalog_data/official_research.')
         parser.add_argument('--dry-run', action='store_true', help='Report what would change and write nothing.')
 
     def handle(self, *args, **options):

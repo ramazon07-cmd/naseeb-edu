@@ -3,7 +3,7 @@
 Universities publish aid in their own currency. The match compares it with the student's budget in USD, so
 ``import_official_aid`` converts with this table. The rates are approximate USD per one unit of the currency,
 fixed on the date below and changed only by editing this file (no live lookup, so a re-import is repeatable).
-A currency that is not listed is not converted: its USD fields stay empty (unknown), never guessed.
+ARS and VES are left out on purpose (too volatile for a fixed rate), and "unknown" is not a currency. A currency that is not listed is not converted: its USD fields stay empty (unknown), never guessed.
 """
 from decimal import Decimal
 
@@ -52,6 +52,33 @@ USD_PER_UNIT = {
     'RON': Decimal('0.22'),
     'BGN': Decimal('0.55'),
     'ISK': Decimal('0.0073'),
+    'COP': Decimal('0.00025'),
+    'MOP': Decimal('0.125'),
+    'OMR': Decimal('2.60'),
+    'BND': Decimal('0.75'),
+    'PEN': Decimal('0.27'),
+    'JOD': Decimal('1.41'),
+    'CRC': Decimal('0.002'),
+    'CLP': Decimal('0.00105'),
+    'PKR': Decimal('0.0036'),
+    'LBP': Decimal('0.0000112'),
+    'UYU': Decimal('0.025'),
+    'BHD': Decimal('2.65'),
+    'TND': Decimal('0.32'),
+    'BDT': Decimal('0.0082'),
+    'UAH': Decimal('0.024'),
+    'IQD': Decimal('0.00076'),
+    'GHS': Decimal('0.075'),
+    'KGS': Decimal('0.0116'),
+    'GTQ': Decimal('0.13'),
+    'PYG': Decimal('0.000128'),
+    'SDG': Decimal('0.00166'),
+    'NGN': Decimal('0.00065'),
+    'LKR': Decimal('0.0033'),
+    'DOP': Decimal('0.0165'),
+    'HNL': Decimal('0.039'),
+    'PAB': Decimal('1'),
+    'BAM': Decimal('0.55'),
 }
 
 
