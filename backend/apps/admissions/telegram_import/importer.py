@@ -22,7 +22,7 @@ from django.conf import settings
 from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 
-from .. import ai_budget, ai_usage
+from .. import ai_budget, ai_providers, ai_usage
 from ..models import OpportunityProgram, TelegramImportChannel
 from . import fetch as fetch_module
 from . import formatter, official, rules
@@ -247,7 +247,7 @@ def _format(run, post, text, candidates, page):
     refuses the call stops the run: the post is fine and waits for the next run.
     """
     if not ai_budget.consume_job(FEATURE):
-        ai_usage.record(FEATURE, None, provider='gateway', status=ai_usage.BUDGET_REFUSED)
+        ai_usage.record(FEATURE, None, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
         raise StopRun('budget_exhausted')
     run.stats.ai_calls += 1
     sink = ai_usage.begin()
@@ -256,12 +256,12 @@ def _format(run, post, text, candidates, page):
     except (formatter.FormatterUnavailable, formatter.GatewayDown) as exc:
         if not (sink or {}).get('answered'):
             ai_budget.refund_job(FEATURE)
-        ai_usage.record(FEATURE, None, provider='gateway', status=ai_usage.FAILED, sink=sink)
+        ai_usage.record(FEATURE, None, provider=ai_providers.provider(), status=ai_usage.FAILED, sink=sink)
         if isinstance(exc, formatter.GatewayDown):
             logger.warning('telegram_import_gateway_down channel=%s post=%s error=%s', post.channel, post.id, exc)
             raise StopRun('gateway_unavailable') from None
         raise
-    ai_usage.record(FEATURE, None, provider='gateway', status=ai_usage.OK, sink=sink)
+    ai_usage.record(FEATURE, None, provider=ai_providers.provider(), status=ai_usage.OK, sink=sink)
     return result
 
 
@@ -392,7 +392,7 @@ def run(fetch=None, pages=None, time_budget=None):
         stats.stopped = 'outbound_ai_off' if not settings.OUTBOUND_AI_ENABLED else 'gateway_not_configured'
         logger.warning(
             'telegram_import_skipped reason=%s: nothing was fetched or sent and no program was added '
-            '(set OUTBOUND_AI_ENABLED and AI_GATEWAY_API_KEY to import)', stats.stopped,
+            '(set OUTBOUND_AI_ENABLED and AI_GATEWAY_API_KEY, or AI_PROVIDER=claude_cli, to import)', stats.stopped,
         )
         return stats
     if settings.TELEGRAM_IMPORT_DAILY_BUDGET <= 0:

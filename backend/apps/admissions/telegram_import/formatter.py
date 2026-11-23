@@ -14,7 +14,7 @@ from django.conf import settings
 
 from core.ai_policy import outbound_ai_allowed
 
-from .. import ai_usage
+from .. import ai_providers, ai_usage
 from ..models import OpportunityProgram
 from .rules import clean_text, parse_date
 
@@ -88,7 +88,7 @@ MARKERS = re.compile(r'<<<|>>>|POST_TEXT|OFFICIAL_PAGE')
 
 
 def gateway_configured():
-    return outbound_ai_allowed() and bool(settings.AI_GATEWAY_API_KEY)
+    return outbound_ai_allowed() and ai_providers.configured()
 
 
 def data(value):
@@ -125,19 +125,8 @@ def user_message(post, text, links, today, page=None):
 
 
 def _post(body):
-    request = urllib.request.Request(
-        settings.AI_GATEWAY_URL,
-        data=json.dumps(body).encode('utf-8'),
-        headers={
-            'Authorization': f'Bearer {settings.AI_GATEWAY_API_KEY}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Vercel-AI-App-Name': 'Naseeb Edu',
-        },
-        method='POST',
-    )
-    with urllib.request.urlopen(request, timeout=settings.TELEGRAM_IMPORT_TIMEOUT_SECONDS) as response:
-        return json.loads(response.read().decode('utf-8'))
+    """One call through the shared provider (gateway, or the Claude CLI bridge)."""
+    return ai_providers.chat(body, settings.TELEGRAM_IMPORT_TIMEOUT_SECONDS)
 
 
 def _rejects_reasoning(exc):
@@ -153,7 +142,7 @@ def _rejects_reasoning(exc):
 def request_gateway(messages):
     """One non-streaming JSON-mode call. Pinned model, temperature 0, no fallback model."""
     body = {
-        'model': settings.TELEGRAM_IMPORT_MODEL,
+        'model': ai_providers.active_model(settings.TELEGRAM_IMPORT_MODEL),
         'messages': messages,
         'response_format': {'type': 'json_object'},
         'temperature': 0,
@@ -249,5 +238,5 @@ def format_post(post, text, links, today, page=None):
         raise GatewayDown(exc.__class__.__name__) from None
     except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
         raise FormatterUnavailable(exc.__class__.__name__) from None
-    except OSError as exc:
+    except (OSError, RuntimeError) as exc:
         raise GatewayDown(exc.__class__.__name__) from None

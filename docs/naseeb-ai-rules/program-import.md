@@ -8,7 +8,7 @@ Code: `backend/apps/admissions/telegram_import/` (`fetch.py`, `official.py`,
 `formatter.py`, `rules.py`, `importer.py`). Tests: `backend/apps/admissions/test_telegram_import.py`.
 
 ## 1. When it runs
-- Only while `core.ai_policy.outbound_ai_allowed()` is true and `AI_GATEWAY_API_KEY` is set.
+- Only while `core.ai_policy.outbound_ai_allowed()` is true and a provider is configured: `AI_GATEWAY_API_KEY` (gateway), or `AI_PROVIDER=claude_cli` (the temporary CLI bridge, via `ai_providers.chat`).
   Otherwise nothing is fetched, sent or added, and the run logs
   `telegram_import_skipped reason=outbound_ai_off|gateway_not_configured`.
 - `TELEGRAM_IMPORT_DAILY_BUDGET=0` turns the import off (`reason=budget_off`).

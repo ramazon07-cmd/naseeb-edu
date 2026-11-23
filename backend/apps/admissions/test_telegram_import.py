@@ -8,6 +8,7 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.management import call_command
 from django.db import DataError
@@ -170,6 +171,21 @@ class TelegramImportTests(TestCase):
         self.assertEqual(body['response_format'], {'type': 'json_object'})
         self.assertNotIn('providerOptions', body)
         self.assertIn('<<<POST_TEXT (untrusted data)', body['messages'][1]['content'])
+
+    def test_import_runs_through_the_claude_cli_bridge_without_a_gateway_key(self):
+        from apps.admissions import ai_providers
+        gateway = self.gateway
+
+        def cli(body, timeout):
+            return gateway(body)
+
+        with override_settings(AI_PROVIDER='claude_cli', AI_GATEWAY_API_KEY='', AI_CLI_ALLOW_PRODUCTION=True), \
+                mock.patch.object(ai_providers, 'cli_available', return_value=True), \
+                mock.patch.object(ai_providers, '_claude_cli', side_effect=cli):
+            stats = importer.run(fetch=self.pages, pages=self.sites)
+        self.assertFalse(stats.stopped)
+        self.assertGreater(self.imported().count(), 0)
+        self.assertEqual(self.gateway.bodies[0]['model'], 'claude-cli/' + settings.AI_TEST_CLI_MODEL)
 
     def test_incremental_runs_are_idempotent(self):
         self.run_import()
