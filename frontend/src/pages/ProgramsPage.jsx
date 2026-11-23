@@ -158,13 +158,23 @@ function DetailFact({ icon: Icon, title, children }) {
 
 // A titled bullet list ("What you get"). Renders nothing when the program has no items.
 function DetailList({ title, items, icon: Icon }) {
-  const list = Array.isArray(items) ? items.filter((entry) => typeof entry === 'string' && entry.trim()) : [];
+  const list = (Array.isArray(items) ? items : []).map((entry) => (typeof entry === 'string' || typeof entry === 'number' ? String(entry).trim() : '')).filter(Boolean);
   if (!list.length) return null;
-  return <GlassCard tone="solid" title={title} headingLevel="h3"><ul className="nb-pd-list">{list.map((entry) => <li key={entry}><Icon size={16} aria-hidden="true" /><span>{entry}</span></li>)}</ul></GlassCard>;
+  return <GlassCard tone="solid" title={title} headingLevel="h3"><ul className="nb-pd-list">{list.map((entry, index) => <li key={`${index}-${entry}`}><Icon size={16} aria-hidden="true" /><span>{entry}</span></li>)}</ul></GlassCard>;
 }
 
+// Fixed team formats are translated; any other researched wording stays as written (English for now).
+const teamLabel = (value) => {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (/^individual$/i.test(text)) return t('Individual');
+  if (/^individual or teams$/i.test(text)) return t('Individual or teams');
+  const upTo = text.match(/^(individual or )?teams? of up to (\d+)$/i);
+  if (upTo) return upTo[1] ? t('Individual or teams of up to {n}', { n: upTo[2] }) : t('Teams of up to {n}', { n: upTo[2] });
+  return text;
+};
+
 const roleLabel = (role) => {
-  const key = String(role || '').toLowerCase();
+  const key = typeof role === 'string' ? role.toLowerCase() : '';
   if (/winner|laureate|champion|medal/.test(key)) return t('Program winner');
   if (/finalist/.test(key)) return t('Program finalist');
   return key ? t('Program participant') : '';
@@ -172,7 +182,12 @@ const roleLabel = (role) => {
 
 // Up to five public past participants from Uzbekistan, each with a LinkedIn profile and the page that shows the participation.
 function PastParticipants({ people, core }) {
-  const list = Array.isArray(people) ? people.filter((person) => person?.name).slice(0, 5) : [];
+  // Defensive: stored data is edited through the admin API, so a bad entry is skipped, never allowed to crash the page.
+  const webLink = (value) => (typeof value === 'string' && /^https?:\/\//i.test(value.trim()) ? value.trim() : '');
+  const list = (Array.isArray(people) ? people : []).map((person) => ({
+    name: typeof person?.name === 'string' ? person.name.trim() : '', role: person?.role, year: Number.isInteger(person?.year) ? person.year : '',
+    linkedin_url: webLink(person?.linkedin_url), source_url: webLink(person?.source_url),
+  })).filter((person) => person.name).slice(0, 5);
   if (!list.length) return <GlassCard tone="solid" title={t('Past participants and winners')} headingLevel="h3">
     <p className="nb-pd-sub">{t('See how past participants and winners describe this program on LinkedIn and what they did next.')}</p>
     <div className="nb-pd-people">{[[t('Participants on LinkedIn'), core], [t('Winners on LinkedIn'), `${core} winner`]].map(([title, query]) => <a key={title} href={linkedInSearch(query)} target="_blank" rel="noreferrer"><span className="nb-pd-in" aria-hidden="true">in</span><span><b>{title}</b><small>“{query}”</small></span><ArrowUpRight size={16} aria-hidden="true" /></a>)}</div>
@@ -180,7 +195,7 @@ function PastParticipants({ people, core }) {
   </GlassCard>;
   return <GlassCard tone="solid" title={t('Past participants from Uzbekistan')} headingLevel="h3">
     <p className="nb-pd-sub">{t('Students from Uzbekistan who took part in this program, from public pages.')}</p>
-    <ul className="nb-pd-alumni">{list.map((person) => <li key={person.name}>
+    <ul className="nb-pd-alumni">{list.map((person, index) => <li key={`${index}-${person.name}`}>
       <span className="nb-pd-avatar" aria-hidden="true">{person.name.trim().charAt(0).toUpperCase()}</span>
       <span className="nb-pd-alumni-text"><b>{person.name}</b><small>{[roleLabel(person.role), person.year].filter(Boolean).join(' · ')}</small></span>
       <span className="nb-pd-alumni-links">
@@ -225,7 +240,7 @@ function ProgramDetail({ entry, similar, saved, saveBusy, today, onToggle, onBac
     [t('Country'), item.country ? `${flag ? `${flag} ` : ''}${item.country}` : ''],
     [t('Format'), delivery],
     [t('Age group'), ageGroup],
-    [t('Team'), item.team_format || ''],
+    [t('Team'), teamLabel(item.team_format)],
     [t('Cost'), cost],
     [t('Deadline'), due ? dateText(due.date) : ''],
   ].filter(([, value]) => value);

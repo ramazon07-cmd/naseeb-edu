@@ -175,7 +175,7 @@
   ],
   "cost": null,
   "deadline": "2026-06-15",
-  "cycle": "2026 (latest announced; completed)",
+  "cycle": "2026",
   "selection_process": null,
   "official_sources": [
    "https://crs.dku.kz/en/osnovnye-napravleniya/programma-po-vodnym-resursam-i-klimatu/letnyaya-shkola-na-aralskom-more/",
@@ -190,7 +190,20 @@
     "linkedin_url": "https://www.linkedin.com/in/sitora-usmonova05",
     "source_url": "https://uz.linkedin.com/in/sitora-usmonova05"
    }
-  ]
+  ],
+  "edition_core": {
+   "country": "Kazakhstan",
+   "city": "Almaty",
+   "start_date": "2026-08-14",
+   "end_date": "2026-08-22",
+   "deadline": "2026-06-15",
+   "deadline_text": "Application deadline: 2026-06-15",
+   "sources": [
+    "https://crs.dku.kz/en/osnovnye-napravleniya/programma-po-vodnym-resursam-i-klimatu/letnyaya-shkola-na-aralskom-more/",
+    "https://crs.dku.kz/documents/102/Concept_8%D0%90SS_2026_FINAL_DQxoZ6z.pdf"
+   ],
+   "edition": "2026"
+  }
  },
  {
   "id": 13,
@@ -227,7 +240,17 @@
    "https://www.awardx.com/competitions/26-international"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2026-08-12",
+   "end_date": "2026-12-17",
+   "deadline": "2026-11-14",
+   "deadline_text": "Application deadline: 2026-11-14",
+   "sources": [
+    "https://www.launchx.com/command-post/news/launchx-expands-global-footprint-with-awardx-international-26-pitch-competition"
+   ],
+   "edition": "2026"
+  }
  },
  {
   "id": 14,
@@ -280,7 +303,20 @@
     "linkedin_url": null,
     "source_url": "https://ayfnhq.org/scholarship-awardees-of-japan-program-by-ayfn/"
    }
-  ]
+  ],
+  "edition_core": {
+   "country": "Japan",
+   "city": "Osaka",
+   "start_date": "2027-01-25",
+   "end_date": "2027-01-30",
+   "deadline": "2026-11-10",
+   "deadline_text": "Extended scholarship application deadline: 2026-11-10",
+   "sources": [
+    "https://ayfnhq.org/event/scholarship-opportunity-winter-japan-culture-camp-2027-by-ayfn-academy/",
+    "https://ayfnhq.org/scholarship-type-and-coverage-winter-japan-culture-camp-2027/"
+   ],
+   "edition": "2027"
+  }
  },
  {
   "id": 15,
@@ -331,7 +367,15 @@
     "linkedin_url": null,
     "source_url": "https://iite.unesco.org/news/2024-youth-innovation-campaign-results/"
    }
-  ]
+  ],
+  "edition_core": {
+   "deadline": "2026-10-31",
+   "deadline_text": "Registration and submission deadline: 2026-10-31",
+   "sources": [
+    "https://iite.unesco.org/announcements/join-the-2026-global-youth-cipp-campaign/"
+   ],
+   "edition": "2026"
+  }
  },
  {
   "id": 16,
@@ -450,7 +494,16 @@
    "https://admissions.cambridge-research.org/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2027-03-15",
+   "deadline_text": "Pre-application: 2027-01-15; early admission: 2027-03-01; regular admission: 2027-03-15",
+   "sources": [
+    "https://cambridge-research.org/academy/cambridge-future-scholar/",
+    "https://admissions.cambridge-research.org/"
+   ],
+   "edition": "Spring 2027"
+  }
  },
  {
   "id": 19,
@@ -553,7 +606,18 @@
    "https://usagermanyscholarship.org/2027-28-cbyx-high-school-application-now-open/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "Germany",
+   "deadline": "2026-11-03",
+   "deadline_text": "Extended application deadline: 2026-11-03 at 11:59 PM Pacific; applications closed",
+   "sources": [
+    "https://usagermanyscholarship.org/",
+    "https://usagermanyscholarship.org/apply/",
+    "https://usagermanyscholarship.org/2027-28-cbyx-high-school-application-now-open/"
+   ],
+   "edition": "2027-2028"
+  }
  },
  {
   "id": 22,
@@ -599,7 +663,18 @@
    "https://sce.cornell.edu/pc-tuition-fees/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2027-01-04",
+   "end_date": "2027-01-22",
+   "deadline": "2026-11-23",
+   "deadline_text": "Application form due: 2026-11-23; supporting materials due: 2026-12-01.",
+   "sources": [
+    "https://sce.cornell.edu/pc-dates-winter/",
+    "https://sce.cornell.edu/pc-prog-online/"
+   ],
+   "edition": "Winter 2027"
+  }
  },
  {
   "id": 23,
@@ -629,13 +704,21 @@
   ],
   "cost": "Admissions support is free. College application fees, standardized tests and university attendance costs are not covered.",
   "deadline": "2026-04-12",
-  "cycle": "2026-2027; university entry fall 2027",
+  "cycle": "2026–2027 admissions cycle; fall 2027 university entry",
   "selection_process": "Application assessment considers academic preparation, financial need, English, leadership and activities. Results are released in mid-to-late May; selected students receive an Edge or Collective offer.",
   "official_sources": [
    "https://www.crimsoneducation.org/us/about-us/our-scholarships"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2026-04-12",
+   "deadline_text": "Final application deadline: 2026-04-12; applications are closed.",
+   "sources": [
+    "https://www.crimsoneducation.org/us/about-us/our-scholarships"
+   ],
+   "edition": "2026–2027 admissions cycle; fall 2027 university entry"
+  }
  },
  {
   "id": 24,
@@ -779,7 +862,17 @@
    "https://headwayinstitute.org/future-diplomats-forum-2027-geneva/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "Switzerland",
+   "city": "Geneva",
+   "start_date": "2027-02-10",
+   "end_date": "2027-02-13",
+   "sources": [
+    "https://headwayinstitute.org/future-diplomats-forum-2027-geneva/"
+   ],
+   "edition": "2027"
+  }
  },
  {
   "id": 28,
@@ -839,8 +932,8 @@
    "Internet access and at least one computer."
   ],
   "cost": "Published entry fee: USD 100 per team.",
-  "deadline": null,
-  "cycle": "2027",
+  "deadline": "2026-09-15",
+  "cycle": "2026",
   "selection_process": "Teams work asynchronously during a four-week competition window. Trained evaluators judge action plans using a rubric.",
   "official_sources": [
    "https://fpspi.org/challenges/",
@@ -848,7 +941,18 @@
    "https://resources.futureproblemsolving.org/article/how-challenges-evaluated/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2026-09-25",
+   "end_date": "2026-10-20",
+   "deadline": "2026-09-15",
+   "deadline_text": "Registration closes: 2026-09-15 at 11:59 PM ET.",
+   "sources": [
+    "https://fpspi.org/challenges/",
+    "https://futureproblemsolving.org/"
+   ],
+   "edition": "2026"
+  }
  },
  {
   "id": 30,
@@ -914,7 +1018,7 @@
   ],
   "cost": "USD 1,800 for 4 weeks; USD 2,400 for 10 weeks; USD 3,600 for 16 weeks. No application fee; limited financial aid.",
   "deadline": "5th of each month for the following month's cohort; rolling application review",
-  "cycle": "Ongoing monthly cohorts",
+  "cycle": "Fall 2026",
   "selection_process": "Application review, interview for shortlisted applicants, admission decision, deposit, and mentor matching.",
   "official_sources": [
    "https://www.girlsinresearch.com/research-scholar-programs",
@@ -967,7 +1071,7 @@
   ],
   "cost": "Free.",
   "deadline": "2026-12-16",
-  "cycle": "Spring 2027",
+  "cycle": "Spring 2027 Pathways",
   "selection_process": "Apply online and complete eligibility checks. General acceptance notifications are emailed in late January.",
   "official_sources": [
    "https://girlswhocode.com/programs/pathways",
@@ -979,7 +1083,17 @@
    "https://girlswhocode.zendesk.com/hc/en-us/articles/45176447724571-When-are-students-notified-about-their-acceptance-into-the-program"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2027-03-01",
+   "end_date": "2027-04-16",
+   "sources": [
+    "https://girlswhocode.com/programs/pathways",
+    "https://girlswhocode.zendesk.com/hc/en-us/articles/44034585768347-When-does-Pathways-run",
+    "https://girlswhocode.com/pathwaysapply"
+   ],
+   "edition": "Spring 2027 Pathways"
+  }
  },
  {
   "id": 33,
@@ -1041,7 +1155,7 @@
   ],
   "cost": null,
   "deadline": "2026-07-20",
-  "cycle": "2026 (past; next cycle unverified)",
+  "cycle": "2026",
   "selection_process": null,
   "official_sources": [
    "https://theogpd.org/product/invitation-only-gcs-2026/",
@@ -1050,7 +1164,22 @@
    "https://theogpd.org/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "Netherlands",
+   "city": "Amsterdam",
+   "start_date": "2026-09-25",
+   "end_date": "2026-09-28",
+   "deadline": "2026-07-20",
+   "deadline_text": "Invitation-only application deadline: 2026-07-20.",
+   "sources": [
+    "https://theogpd.org/product/invitation-only-gcs-2026/",
+    "https://theogpd.org/our-speakers/",
+    "https://theogpd.org/gallery/",
+    "https://theogpd.org/"
+   ],
+   "edition": "2026"
+  }
  },
  {
   "id": 35,
@@ -1141,7 +1270,7 @@
   ],
   "cost": "2027 USD: Pre-College $6,250; SSP residential $9,260 for 4 weeks or $15,980 for 7 weeks; SSP online/commuting $4,180-$8,160. Additional $75 application fee.",
   "deadline": "2027-02-10",
-  "cycle": "2027",
+  "cycle": "Summer 2027",
   "selection_process": "Holistic review of academic records, essays and counselor reports. Early and regular rounds, followed by rolling admission if space remains.",
   "official_sources": [
    "https://summer.harvard.edu/high-school-programs/",
@@ -1150,7 +1279,19 @@
    "https://summer.harvard.edu/blog/everything-you-need-to-know-about-applying-to-summer-2027-programs/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "United States",
+   "city": "Cambridge",
+   "deadline": "2027-02-10",
+   "deadline_text": "Regular application and financial aid: 2027-02-10; early/priority aid: 2027-01-13; late applications: 2027-03-31, or earlier if full.",
+   "sources": [
+    "https://summer.harvard.edu/high-school/admissions/",
+    "https://summer.harvard.edu/parents-guardians-families-of-future-harvard-summer-school-students/",
+    "https://summer.harvard.edu/high-school-programs/secondary-school-program/options/"
+   ],
+   "edition": "Summer 2027"
+  }
  },
  {
   "id": 38,
@@ -1203,14 +1344,23 @@
   ],
   "cost": "USD 6,950 for Seminars or Labs; competitive financial aid for applicants with household income below USD 75,000.",
   "deadline": "2026-11-22",
-  "cycle": "Winter 2026 (application deadline passed)",
+  "cycle": "Winter 2026",
   "selection_process": "Written application review, shortlisting and a 30-minute interview assessing preparation, motivation and analytical ability.",
   "official_sources": [
    "https://horizoninspires.com/programs/",
    "https://horizoninspires.com/blog/how-to-apply-to-the-horizon-academic-research-program-tips-from-the-horizon-admissions-committee/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2026-12-14",
+   "deadline": "2026-11-22",
+   "deadline_text": "Winter 2026 final application deadline: 2026-11-22, already passed.",
+   "sources": [
+    "https://horizoninspires.com/programs/"
+   ],
+   "edition": "Winter 2026"
+  }
  },
  {
   "id": 40,
@@ -1303,7 +1453,16 @@
    "https://www.icu.ac.jp/en/news/images/EssayFormat_ICUGYEC2025.pdf"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2025-10-10",
+   "deadline_text": "Essay submission deadline: 2025-10-10 at 15:00 JST; prerequisite registration closed 2025-09-22.",
+   "sources": [
+    "https://www.icu.ac.jp/globalicu/en/news2/GlobalYouthEssay2025.html",
+    "https://www.icu.ac.jp/en/news/GlobalYouthEssay2025.html"
+   ],
+   "edition": "2025"
+  }
  },
  {
   "id": 43,
@@ -1344,7 +1503,18 @@
     "linkedin_url": "https://www.linkedin.com/in/ayzada-baymuratova-4374b8215",
     "source_url": "https://t.me/s/piimauz/3685"
    }
-  ]
+  ],
+  "edition_core": {
+   "start_date": "2026-08-03",
+   "end_date": "2026-10-25",
+   "deadline": "2026-10-25",
+   "deadline_text": "Essay entry deadline: 2026-10-25, closed; scholarship redemption deadline: 2026-11-25.",
+   "sources": [
+    "https://www.immerse.education/about/programmes/immerse-essay-competition",
+    "https://www.immerse.education/immerse-competitions-hub"
+   ],
+   "edition": "2027"
+  }
  },
  {
   "id": 44,
@@ -1461,7 +1631,16 @@
    "https://www.icu.ac.jp/en/news/images/EssayFormat_ICUGYEC2025.pdf"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2025-10-10",
+   "deadline_text": "Essay submission deadline: 2025-10-10 at 15:00 JST; prerequisite registration closed 2025-09-22.",
+   "sources": [
+    "https://www.icu.ac.jp/globalicu/en/news2/GlobalYouthEssay2025.html",
+    "https://www.icu.ac.jp/en/news/GlobalYouthEssay2025.html"
+   ],
+   "edition": "2025"
+  }
  },
  {
   "id": 47,
@@ -1717,7 +1896,7 @@
   ],
   "cost": "Basic Startup Internship: USD 3,190 in two installments, starting with a USD 200 fully refundable deposit. Interns are not paid.",
   "deadline": "2026-12-27",
-  "cycle": "Winter II 2027; starts January 18, 2027",
+  "cycle": "Winter II 2027",
   "selection_process": "Online application, interview and admissions decision, followed by company matching. Students approve the proposed match.",
   "official_sources": [
    "https://www.ladderinternships.com/",
@@ -1725,7 +1904,17 @@
    "https://www.ladderinternships.com/our-programs"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2027-01-18",
+   "deadline": "2026-12-27",
+   "deadline_text": "Winter II cohort admission deadline: 2026-12-27.",
+   "sources": [
+    "https://www.ladderinternships.com/our-programs",
+    "https://www.ladderinternships.com/ladder-internships-blog/virtual-internships-for-high-school-students"
+   ],
+   "edition": "Winter II 2027"
+  }
  },
  {
   "id": 54,
@@ -1757,7 +1946,7 @@
   ],
   "cost": "Published tuition: USD 13,495 in-person Entrepreneurship; USD 7,495 Online Entrepreneurship; USD 2,495 Online BootCamp. Application fees vary by round; waivers are available.",
   "deadline": "2027-03-31",
-  "cycle": "Summer 2027; early deadline January 21, financial award deadline March 4, final deadline March 31",
+  "cycle": "Summer 2027 — In-Person Entrepreneurship Program",
   "selection_process": "Application and transcript review, interview for selected applicants, then an offer and deposit to secure the place. Programs may fill before the final deadline.",
   "official_sources": [
    "https://www.launchx.com/programs",
@@ -1775,7 +1964,20 @@
     "linkedin_url": null,
     "source_url": "https://www.launchx.com/programs"
    }
-  ]
+  ],
+  "edition_core": {
+   "country": "United States",
+   "city": "Ann Arbor",
+   "start_date": "2027-06-27",
+   "end_date": "2027-07-24",
+   "deadline": "2027-03-31",
+   "deadline_text": "Final application deadline: 2027-03-31; early: 2027-01-21; financial award: 2027-03-04.",
+   "sources": [
+    "https://www.launchx.com/programs",
+    "https://www.launchx.com/command-post/news/launchx-opens-applications-for-2027-programs"
+   ],
+   "edition": "Summer 2027 — In-Person Entrepreneurship Program"
+  }
  },
  {
   "id": 55,
@@ -1823,7 +2025,7 @@
   "requirements": [],
   "cost": "Fully funded.",
   "deadline": null,
-  "cycle": "2027; detailed announcement pending",
+  "cycle": "2027",
   "selection_process": "Competitive application review by Asia Foundation experts, selection panelists and a final selection committee.",
   "official_sources": [
    "https://asiafoundation.org/fellowship/leadnext/"
@@ -1858,7 +2060,7 @@
   ],
   "cost": null,
   "deadline": "2026-11-29",
-  "cycle": "Winter 2026; starts December 7, 2026",
+  "cycle": "Winter 2026",
   "selection_process": "Application review, shortlisted interview, mentor matching and admission decision.",
   "official_sources": [
    "https://www.lumiere-education.com/lumiere-programs",
@@ -1866,7 +2068,16 @@
    "https://www.lumiere-education.com/students-application-form"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2026-12-07",
+   "deadline": "2026-11-29",
+   "deadline_text": "Regular admission deadline: 2026-11-29",
+   "sources": [
+    "https://www.lumiere-education.com/lumiere-programs"
+   ],
+   "edition": "Winter 2026"
+  }
  },
  {
   "id": 58,
@@ -1900,7 +2111,19 @@
    "https://mcwglobal.org/young-leaders-fellowship-2027/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "United States",
+   "city": "New York; Burlington",
+   "start_date": "2027-07-20",
+   "end_date": "2027-07-29",
+   "deadline": "2026-12-03",
+   "deadline_text": "Application deadline: 2026-12-03 at 11:59 PM EST (New York)",
+   "sources": [
+    "https://mcwglobal.org/young-leaders-fellowship-2027/"
+   ],
+   "edition": "2027-2028"
+  }
  },
  {
   "id": 59,
@@ -1946,7 +2169,7 @@
  {
   "id": 61,
   "overview": "A global two-day hackathon where teams use NASA and partner data to address Earth and space challenges. The 2026 event ran November 14-15 and is now closed.",
-  "country": "Multiple countries, including Uzbekistan",
+  "country": "Multiple countries",
   "format": "hybrid",
   "age_range": "All ages",
   "grades": null,
@@ -1970,7 +2193,7 @@
   ],
   "cost": "Free",
   "deadline": "2026-11-15",
-  "cycle": "2026; judging continues into January 2027",
+  "cycle": "2026",
   "selection_process": "Submitted projects undergo judging for global nominations, finalist recognition and global awards; winners announced January 2027.",
   "official_sources": [
    "https://www.spaceappschallenge.org/resources/participant-faqs/",
@@ -2015,7 +2238,18 @@
     "linkedin_url": null,
     "source_url": "https://gov.uz/en/uzspace/news/view/65942"
    }
-  ]
+  ],
+  "edition_core": {
+   "country": "Multiple countries",
+   "start_date": "2026-11-14",
+   "end_date": "2026-11-15",
+   "deadline": "2026-11-15",
+   "deadline_text": "Registration closed at the end of the hackathon on 2026-11-15",
+   "sources": [
+    "https://www.spaceappschallenge.org/resources/participant-faqs/"
+   ],
+   "edition": "2026"
+  }
  },
  {
   "id": 62,
@@ -2046,7 +2280,7 @@
   ],
   "cost": null,
   "deadline": "2027-06-07",
-  "cycle": "Fall 2027 Virtual NSLI-Y; Summer 2027 and academic year 2027-28 abroad",
+  "cycle": "Fall 2027 Virtual NSLI-Y",
   "selection_process": "Eligibility and application review; abroad semifinalists complete academic-year interviews or summer timed responses. Virtual selection follows a separate review.",
   "official_sources": [
    "https://www.nsliforyouth.org/",
@@ -2057,7 +2291,15 @@
    "https://www.nsliforyouth.org/compare-programs/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2027-06-07",
+   "deadline_text": "Virtual NSLI-Y application deadline: 2027-06-07 at 4:00 PM ET",
+   "sources": [
+    "https://www.nsliforyouth.org/how-to-apply/dates-and-deadlines/"
+   ],
+   "edition": "Fall 2027 Virtual NSLI-Y"
+  }
  },
  {
   "id": 63,
@@ -2294,7 +2536,7 @@
   ],
   "cost": "Free under the published 2026 rules.",
   "deadline": "2026-06-11",
-  "cycle": "2026 (closed); next cycle unannounced",
+  "cycle": "2026",
   "selection_process": "Preliminary multiple-choice test, main economics test and business-case final. Rules specify 15 highest-scoring first-stage teams advance to finals.",
   "official_sources": [
    "https://aeolymp.org/",
@@ -2304,7 +2546,18 @@
    "https://aeolymp.org/participants.html"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2026-06-13",
+   "end_date": "2026-07-03",
+   "deadline": "2026-06-11",
+   "deadline_text": "Registration deadline: 2026-06-11 at 23:59 UTC+5",
+   "sources": [
+    "https://aeolymp.org/",
+    "https://aeolymp.org/rules.html"
+   ],
+   "edition": "2026"
+  }
  },
  {
   "id": 70,
@@ -2334,14 +2587,22 @@
   ],
   "cost": "Free under the published 2025 rules.",
   "deadline": "2025-05-18",
-  "cycle": "2025 (closed); next cycle unannounced",
+  "cycle": "Spring 2025",
   "selection_process": "Essays judged on English, coherence, relevance, originality and evidence; shortlisted entrants proceed to awards consideration.",
   "official_sources": [
    "https://www.oxfordscholastica.com/resources/essay-competition/",
    "https://www.oxfordscholastica.com/resources/essay-competition/results/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2025-05-18",
+   "deadline_text": "Essay submission deadline: 2025-05-18 at 9:00 PM BST",
+   "sources": [
+    "https://www.oxfordscholastica.com/resources/essay-competition/"
+   ],
+   "edition": "Spring 2025"
+  }
  },
  {
   "id": 71,
@@ -2793,7 +3054,17 @@
    "https://stanforddaily.com/workshops/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2026-12-14",
+   "end_date": "2027-01-08",
+   "deadline": "2026-11-25",
+   "deadline_text": "Regular application deadline: 2026-11-25 at 5:00 PM PT.",
+   "sources": [
+    "https://stanforddaily.com/workshops/"
+   ],
+   "edition": "Winter 2026–2027"
+  }
  },
  {
   "id": 83,
@@ -2826,14 +3097,26 @@
   ],
   "cost": "No participation tuition; USD 50 application fee, with waivers available. Housing and transportation are not provided.",
   "deadline": "Late February 2027; exact date not published",
-  "cycle": "2027; application availability listed as December 18, 2026 at 5:00 PM PST",
+  "cycle": "Summer 2027",
   "selection_process": "Selection strongly favors local San Francisco Bay Area students because of grant requirements. Nonlocal eligible students may apply.",
   "official_sources": [
    "https://simr.stanford.edu/",
    "https://simr.stanford.edu/frequently-asked-questions.html"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "United States",
+   "city": "Stanford",
+   "start_date": "2027-06-07",
+   "end_date": "2027-07-29",
+   "deadline_text": "Applications due in late February 2027; exact deadline not published.",
+   "sources": [
+    "https://simr.stanford.edu/",
+    "https://simr.stanford.edu/frequently-asked-questions.html"
+   ],
+   "edition": "Summer 2027"
+  }
  },
  {
   "id": 84,
@@ -3119,7 +3402,7 @@
    "Arrange required visas and travel documentation."
   ],
   "cost": "Listed program fees range from USD 6,600 to USD 8,420, plus airfare and other excluded expenses. The 2027 application promotion lists a USD 50 application fee and USD 500 enrollment deposit credited toward tuition.",
-  "deadline": "Priority enrollment: 2027-02-15; enrollment requests afterward are not guaranteed.",
+  "deadline": "2027-02-15",
   "cycle": "Summer 2027",
   "selection_process": "Application and interview review assess motivation, maturity, ability to work with diverse groups, curiosity and openness to the host culture.",
   "official_sources": [
@@ -3130,7 +3413,18 @@
    "https://www.experiment.org/scholarships/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "Ecuador, France, Germany, Ghana, Italy, Japan, Panama, South Korea and Spain",
+   "deadline": "2027-02-15",
+   "deadline_text": "Priority enrollment: 2027-02-15; later enrollment requests are not guaranteed.",
+   "sources": [
+    "https://www.experiment.org/",
+    "https://www.experiment.org/apply/",
+    "https://www.experiment.org/apply/dates-fees-availability/"
+   ],
+   "edition": "Summer 2027"
+  }
  },
  {
   "id": 91,
@@ -3173,7 +3467,19 @@
    "https://www.essaycomp.org/terms-conditions"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2026-10-01",
+   "end_date": "2027-03-31",
+   "deadline": "2027-02-10",
+   "deadline_text": "Registration closes 2027-02-10 at 23:59 GMT; regional essays due 2027-02-23.",
+   "sources": [
+    "https://www.essaycomp.org/",
+    "https://www.essaycomp.org/faq",
+    "https://www.essaycomp.org/terms-conditions"
+   ],
+   "edition": "2027"
+  }
  },
  {
   "id": 92,
@@ -3207,8 +3513,8 @@
    "Academic credit requires a separate University of Pittsburgh application and admission."
   ],
   "cost": "USD 21,000 for the semester program. Partial financial aid is available, but every admitted student must contribute. Flights, passports, vaccines and other pre-arrival expenses are excluded.",
-  "deadline": "2027-04-02",
-  "cycle": "August 2027 semester: 2027-08-09 to 2027-12-03",
+  "deadline": "2026-10-02",
+  "cycle": "February 2027",
   "selection_process": "Three stages: application review for fit; feasibility checks and interview; final committee review considering individual merit, available support and class composition.",
   "official_sources": [
    "https://tiltingfutures.org/admissions/",
@@ -3216,7 +3522,20 @@
    "https://tiltingfutures.org/tuition-financial-aid/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "South Africa or Malaysia",
+   "city": "Cape Town or Penang",
+   "start_date": "2027-02-01",
+   "end_date": "2027-05-25",
+   "deadline": "2026-10-02",
+   "deadline_text": "Final application deadline: 2026-10-02; applications closed.",
+   "sources": [
+    "https://tiltingfutures.org/admissions/",
+    "https://tiltingfutures.org/program/"
+   ],
+   "edition": "February 2027"
+  }
  },
  {
   "id": 93,
@@ -3429,7 +3748,7 @@
   ],
   "cost": "Family contribution depends on assessed financial need and the scholarship awarded; no single fixed price is published.",
   "deadline": "2026-09-30",
-  "cycle": "2027–2029 (applications closed); 2028–2030 eligibility posted",
+  "cycle": "2027–2029",
   "selection_process": "Online application, logical reasoning test, video interview and final selection day; financial assessment and nomination follow. Colleges make final admission decisions.",
   "official_sources": [
    "https://uz.uwc.org/how-to-apply/",
@@ -3437,7 +3756,16 @@
    "https://apply.uwc.org/prog/nc_uzbekistan_2026/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2026-09-30",
+   "deadline_text": "2027–2029 intake application deadline: 2026-09-30; applications closed, selection continuing.",
+   "sources": [
+    "https://uz.uwc.org/how-to-apply/",
+    "https://uz.uwc.org/eligibility-criteria/"
+   ],
+   "edition": "2027–2029"
+  }
  },
  {
   "id": 99,
@@ -3476,7 +3804,16 @@
    "https://www.veritasai.com/faqs"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2026-11-29",
+   "deadline_text": "Winter application deadline: 2026-11-29; applications reviewed on a rolling basis.",
+   "sources": [
+    "https://www.veritasai.com/",
+    "https://www.veritasai.com/ai-scholars"
+   ],
+   "edition": "Winter 2026"
+  }
  },
  {
   "id": 100,
@@ -3515,12 +3852,20 @@
    "https://www.veritasai.com/faqs"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2026-11-29",
+   "deadline_text": "Winter application deadline: 2026-11-29",
+   "sources": [
+    "https://www.veritasai.com/ai-scholars"
+   ],
+   "edition": "Winter 2026"
+  }
  },
  {
   "id": 101,
   "overview": "Where There Be Dragons offers immersive summer and gap travel programs involving homestays, language learning and outdoor exploration. Students apply individually and travel in small instructor-led groups.",
-  "country": "Multiple countries; destination depends on the program",
+  "country": "Multiple countries",
   "format": "onsite",
   "age_range": "15–20 for summer; 17–22 for gap programs; individual trips have narrower limits",
   "grades": null,
@@ -3547,7 +3892,7 @@
   ],
   "cost": "Varies by trip. Published 2027 examples: Peru summer $9,190 plus airfare; Guatemala–Costa Rica gap semester $18,790 plus airfare.",
   "deadline": "Rolling; no fixed general application deadline, subject to available places.",
-  "cycle": "2027 summer and spring/fall gap programs",
+  "cycle": "2027 program catalog",
   "selection_process": "Application and video interview review, with follow-up where needed; decisions usually arrive within five business days after follow-up is complete.",
   "official_sources": [
    "https://www.wheretherebedragons.com/summer-travel-abroad",
@@ -3558,7 +3903,17 @@
    "https://www.wheretherebedragons.com/program/guatemala-costa-rica-semester"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "Multiple countries",
+   "deadline_text": "Deadlines depend on the selected program; no single catalog-wide deadline.",
+   "sources": [
+    "https://www.wheretherebedragons.com/programs?category=7%2C8&page=1",
+    "https://www.wheretherebedragons.com/program/gap-year-japan-food-culture",
+    "https://www.wheretherebedragons.com/program/summer-abroad-japan-food-culture"
+   ],
+   "edition": "2027 program catalog"
+  }
  },
  {
   "id": 102,
@@ -3748,14 +4103,28 @@
   ],
   "cost": "Funded route: USD 16.99; self-funded early-bird: USD 599; forum access: USD 200; installment option starts with USD 199.",
   "deadline": "2026-12-14",
-  "cycle": "2027",
+  "cycle": "2027 — Young Economic Forum Dubai",
   "selection_process": "Funded places are merit-based; shortlisted candidates may have a virtual interview. Unsuccessful applicants may receive paid-category offers.",
   "official_sources": [
    "https://thecipes.org/events/young-economic-forum-jakarta",
    "https://thecipes.org/yef-dubai-2027"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "United Arab Emirates",
+   "city": "Dubai",
+   "start_date": "2027-02-01",
+   "end_date": "2027-02-03",
+   "deadline": "2026-12-14",
+   "deadline_text": "Applications close: 2026-12-14 at 11:59 PM; timezone unspecified.",
+   "sources": [
+    "https://thecipes.org/events",
+    "https://thecipes.org/yef-dubai-2027"
+   ],
+   "edition": "2027 — Young Economic Forum Dubai",
+   "title": "Young Economic Forum Dubai 2027"
+  }
  },
  {
   "id": 107,
@@ -3788,14 +4157,23 @@
   ],
   "cost": "Free entry.",
   "deadline": "2026-11-01",
-  "cycle": "2026-2027",
+  "cycle": "2026–2027",
   "selection_process": "Readers assess originality, voice, craft, imagination, and overall quality. Initial judging is followed by external-panel judging and finalist selection.",
   "official_sources": [
    "https://www.bennington.edu/news-and-features/9th%E2%80%9312th-grade-students-invited-submit-bennington-college-young-writers-awards-0",
    "https://www.bennington.edu/events/bennington-young-creators-awards/bennington-young-writers-awards"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2026-11-01",
+   "deadline_text": "Submissions closed: 2026-11-01; winners announced in spring 2027.",
+   "sources": [
+    "https://www.bennington.edu/news-and-features/9th%E2%80%9312th-grade-students-invited-submit-bennington-college-young-writers-awards-0",
+    "https://www.bennington.edu/events/bennington-young-creators-awards/bennington-young-writers-awards"
+   ],
+   "edition": "2026–2027"
+  }
  },
  {
   "id": 108,
@@ -3823,14 +4201,28 @@
   ],
   "cost": "A processing fee applies; its amount is not stated on the official event page. Participation costs depend on category.",
   "deadline": "2026-11-30",
-  "cycle": "2027",
+  "cycle": "2027 — Human Rights Summit Canada",
   "selection_process": "Committee review considers leadership, motivation, achievements, community engagement, and human rights commitment. Sponsored applicants may be interviewed; results are scheduled for December 25, 2026.",
   "official_sources": [
    "https://www.vfri.ca/event/vancouver-canada-2/",
    "https://www.vfri.ca/human-rights-summit-canada-2027/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "Canada",
+   "city": "Vancouver",
+   "start_date": "2027-05-21",
+   "end_date": "2027-05-24",
+   "deadline": "2026-11-30",
+   "deadline_text": "Application deadline: 2026-11-30",
+   "sources": [
+    "https://www.vfri.ca/event/vancouver-canada-2/",
+    "https://www.vfri.ca/human-rights-summit-canada-2027/"
+   ],
+   "edition": "2027 — Human Rights Summit Canada",
+   "title": "Youth Congress Canada: Human Rights Summit 2027"
+  }
  },
  {
   "id": 109,
@@ -3873,7 +4265,7 @@
  {
   "id": 110,
   "overview": "Teams design, build, and program industrial-sized robots with adult mentors, then compete in alliance-based matches. The 2027 BIOCORE challenge launches on January 9, 2027.",
-  "country": null,
+  "country": "Multiple countries",
   "format": "onsite",
   "age_range": "14-18",
   "grades": "9-12",
@@ -3897,7 +4289,7 @@
   ],
   "cost": "USD 6,500 per team for season registration; additional equipment, shipping, and travel costs apply. Qualified Championship entry costs USD 6,000.",
   "deadline": "2026-11-17",
-  "cycle": "2027",
+  "cycle": "2027 — BIOCORE",
   "selection_process": "Teams register to compete rather than applying through an essay competition. Championship participation requires qualification.",
   "official_sources": [
    "https://www.firstinspires.org/programs/frc/",
@@ -3906,7 +4298,20 @@
    "https://www.firstinspires.org/programs/cost-and-registration"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "Multiple countries",
+   "start_date": "2027-01-09",
+   "end_date": "2027-05-01",
+   "deadline": "2026-11-17",
+   "deadline_text": "Initial event registration payment due: 2026-11-17 at 5 PM Eastern.",
+   "sources": [
+    "https://www.firstinspires.org/programs/frc/game-and-season",
+    "https://www.firstinspires.org/programs/calendar?view=calendar",
+    "https://www.firstinspires.org/community-blog/2027-season-checkout-and-registration-changes"
+   ],
+   "edition": "2027 — BIOCORE"
+  }
  },
  {
   "id": 111,
@@ -4243,14 +4648,23 @@
   ],
   "cost": "Free for the Junior Academy successor",
   "deadline": "2027-01-06",
-  "cycle": "Spring 2027 Junior Academy successor; invitation-only intake",
+  "cycle": "Spring 2027 — Junior Academy successor",
   "selection_process": "Applications are reviewed individually. Spring 2027 decisions are scheduled for January 26, 2027.",
   "official_sources": [
    "https://www.nyas.org/wp-content/uploads/2024/01/annual_report_2022.pdf",
    "https://www.nyas.org/learning/high-school-research-programs/the-junior-academy/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "deadline": "2027-01-06",
+   "deadline_text": "Invitation-only partner intake deadline: 2027-01-06.",
+   "sources": [
+    "https://www.nyas.org/learning/high-school-research-programs/the-junior-academy/",
+    "https://www.nyas.org/wp-content/uploads/2024/02/the-new-york-academy-of-sciences-stem-education-10-year-report.pdf"
+   ],
+   "edition": "Spring 2027 — Junior Academy successor"
+  }
  },
  {
   "id": 121,
@@ -4301,8 +4715,8 @@
    "Complete participant profiles, parental consent and the competition Honor Code"
   ],
   "cost": "Free",
-  "deadline": "2027-03-11",
-  "cycle": "2026–2027 global season; Uzbekistan local schedule not yet updated",
+  "deadline": "2026-03-18",
+  "cycle": "2026 — latest announced Uzbekistan season",
   "selection_process": "Submitted projects enter quarterfinal judging, followed by online semifinals. Fifteen Girls Track finalist teams advance to World Summit; one grand-prize winner is selected per age division.",
   "official_sources": [
    "https://technovation.uz/",
@@ -4328,7 +4742,18 @@
     "linkedin_url": null,
     "source_url": "https://technovation.uz/technosquad"
    }
-  ]
+  ],
+  "edition_core": {
+   "country": "Uzbekistan",
+   "deadline": "2026-03-18",
+   "deadline_text": "2026 Uzbekistan season registration deadline: 2026-03-18.",
+   "sources": [
+    "https://technovation.uz/",
+    "https://technovation.uz/instructions",
+    "https://technovationchallenge.org/competition/"
+   ],
+   "edition": "2026 — latest announced Uzbekistan season"
+  }
  },
  {
   "id": 123,
@@ -4878,7 +5303,7 @@
   ],
   "cost": "INR 49,500 plus GST for five-day programmes; INR 85,000 plus GST for ten-day programmes; INR 1,000 application fee.",
   "deadline": "2027-03-14",
-  "cycle": "2027; March 14 is the early application and scholarship deadline",
+  "cycle": "2027 — Edition 1, 10-day programmes",
   "selection_process": "Rolling selection considers academic performance, the essay and co-curricular engagement. Enrolment decisions are emailed.",
   "official_sources": [
    "https://www.ashoka.edu.in/ysp/",
@@ -4886,7 +5311,22 @@
    "https://www.ashoka.edu.in/academic-programme/young-scholars-programme-applied-sciences-innovation-and-research/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "India",
+   "city": "Sonipat",
+   "start_date": "2027-05-17",
+   "end_date": "2027-05-28",
+   "deadline": "2027-03-14",
+   "deadline_text": "Early application and scholarship deadline: 2027-03-14; rolling admissions. Applications open 2026-12-01.",
+   "sources": [
+    "https://www.ashoka.edu.in/ysp/",
+    "https://www.ashoka.edu.in/ysp-admissions-2/",
+    "https://www.ashoka.edu.in/ysp-artificial-intelligence-robotics-and-computing-faqs/",
+    "https://www.ashoka.edu.in/"
+   ],
+   "edition": "2027 — Edition 1, 10-day programmes"
+  }
  },
  {
   "id": 139,
@@ -5186,7 +5626,7 @@
   ],
   "cost": "2027 tuition is not yet published. A USD 75 application fee is listed; need-based aid is available.",
   "deadline": "2027-02-03",
-  "cycle": "2027",
+  "cycle": "2027 — residential",
   "selection_process": "Complete applications are reviewed for grades, course rigor, essays, optional test scores and one recommendation. All materials are due by 11:59 pm Eastern on February 3; published requirements remain subject to change for 2027.",
   "official_sources": [
    "https://www.bu.edu/summer/high-school-programs/rise-internship-practicum/",
@@ -5194,7 +5634,21 @@
    "https://www.bu.edu/summer/high-school-programs/rise-internship-practicum/tuition-aid-payment/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "United States",
+   "city": "Boston",
+   "start_date": "2027-06-27",
+   "end_date": "2027-08-06",
+   "deadline": "2027-02-03",
+   "deadline_text": "Application and supplemental-material deadline: 2027-02-03 at 11:59 pm Eastern.",
+   "sources": [
+    "https://www.bu.edu/summer/high-school-programs/rise-internship-practicum/",
+    "https://www.bu.edu/summer/high-school-programs/rise-internship-practicum/calendar-of-events/",
+    "https://www.bu.edu/summer/high-school-programs/rise-internship-practicum/how-to-apply/"
+   ],
+   "edition": "2027 — residential"
+  }
  },
  {
   "id": 147,
@@ -5227,7 +5681,7 @@
   ],
   "cost": "Tuition varies by program, campus and residential or commuter option; current prices appear on individual program pages.",
   "deadline": "Rolling while places or waitlist positions remain available; scholarship applications close 2027-04-01 at 11:59 pm Central.",
-  "cycle": "2027",
+  "cycle": "Summer 2027",
   "selection_process": "Enrollment requires meeting eligibility criteria, submitting the application and paying a deposit, subject to availability. Scholarships undergo a separate financial-need review.",
   "official_sources": [
    "https://www.nslcleaders.org/",
@@ -5236,7 +5690,17 @@
    "https://www.nslcleaders.org/earn-college-credit-hours/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "United States; United Kingdom",
+   "deadline_text": "Rolling enrollment while program or waitlist space remains; scholarship deadline: 2027-04-01 at 11:59 pm Central.",
+   "sources": [
+    "https://www.nslcleaders.org/",
+    "https://www.nslcleaders.org/dates-locations/",
+    "https://www.nslcleaders.org/summer-program-scholarships/"
+   ],
+   "edition": "Summer 2027"
+  }
  },
  {
   "id": 148,
@@ -5441,7 +5905,18 @@
    "https://mitadmissions.org/landing/summer-programs/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "country": "United States",
+   "city": "Cambridge",
+   "deadline": "2027-02-01",
+   "deadline_text": "Application deadline: 2027-02-01 at 11:59 pm PST.",
+   "sources": [
+    "https://mitadmissions.org/landing/summer-programs/",
+    "https://mites.mit.edu/discover-mites/faq-for-prospective-students/faqs-mites-semester-and-mites-summer/"
+   ],
+   "edition": "2027"
+  }
  },
  {
   "id": 153,
@@ -5666,8 +6141,8 @@
    "International residential students need a B-2 or B-1/B-2 visa"
   ],
   "cost": "Winter online: USD 695. Summer online: USD 995. The 2027 residential fee is listed as USD 3,095; its FAQ still shows USD 2,575. No application fee.",
-  "deadline": "2026-12-16 (winter online); 2027-03-01 (summer residential); summer online deadline not announced",
-  "cycle": "2027: winter January 23–February 27; summer online June 20–26; residential June 27–July 10 or July 18–31",
+  "deadline": "2026-12-16",
+  "cycle": "Winter 2027 — online",
   "selection_process": "Selective application review emphasizing the personal statement; residential review also emphasizes the recommendation. Winter decisions arrive in early January; residential decisions are targeted for late March.",
   "official_sources": [
    "https://kenyonreview.org/high-school-workshops/",
@@ -5676,7 +6151,18 @@
    "https://kenyonreview.org/event/young-writers-summer-residential-workshops/"
   ],
   "verified_at": "2026-11-23",
-  "past_participants_uz": []
+  "past_participants_uz": [],
+  "edition_core": {
+   "start_date": "2027-01-23",
+   "end_date": "2027-02-27",
+   "deadline": "2026-12-16",
+   "deadline_text": "Winter online application deadline: 2026-12-16.",
+   "sources": [
+    "https://kenyonreview.org/high-school-workshops/",
+    "https://kenyonreview.org/event/young-writers-winter-online-workshops/"
+   ],
+   "edition": "Winter 2027 — online"
+  }
  },
  {
   "id": 159,
@@ -5784,7 +6270,7 @@
   ],
   "cost": "Free for accepted scholars.",
   "deadline": "2026-11-01",
-  "cycle": "Winter 2026; latest published cohort, with deadline already passed. No later deadline published on the program page.",
+  "cycle": "Winter 2026",
   "selection_process": "Application review followed by an interview for shortlisted applicants.",
   "official_sources": [
    "https://lumiere.foundation/",
@@ -5801,7 +6287,16 @@
     "linkedin_url": null,
     "source_url": "https://millatiftixorlari.uz/tpost/3de79fr0o1-arslon-rajabov-ruslanovich"
    }
-  ]
+  ],
+  "edition_core": {
+   "deadline": "2026-11-01",
+   "deadline_text": "Application deadline: 2026-11-01 (passed)",
+   "sources": [
+    "https://lumiere.foundation/breakthrough-program",
+    "https://lumiere.foundation/application"
+   ],
+   "edition": "Winter 2026"
+  }
  },
  {
   "id": 162,

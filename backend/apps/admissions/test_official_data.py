@@ -349,13 +349,40 @@ class ImportProgramDetailsTests(APITestCase):
         self.assertEqual(self.program.benefits, [])
 
     def test_the_shipped_details_file_is_well_formed(self):
-        from apps.admissions.management.commands.import_official_programs import DETAILS_FILE, people
+        from apps.admissions.management.commands.import_official_programs import DETAILS_FILE
+        from apps.admissions.program_details import LIST_LIMITS, clean_people
         rows = json.loads(DETAILS_FILE.read_text(encoding='utf-8'))
         self.assertTrue(rows)
         for row in rows:
-            for person in row.get('past_participants_uz') or []:
-                self.assertTrue(person.get('source_url'), row['id'])
-            self.assertLessEqual(len(people(row.get('past_participants_uz')) or []), 5)
+            people = row.get('past_participants_uz') or []
+            self.assertEqual(len(clean_people(people) or []), len(people), f'a person of row {row["id"]} would be dropped')
+            self.assertLessEqual(len(people), 5)
+            # Nothing is cut to fit: every list in the file is within the stored limit.
+            for field, name in (('benefits', 'benefits'), ('who_can_apply', 'who_can_apply'), ('requirements', 'requirements_list')):
+                self.assertLessEqual(len(row.get(field) or []), LIST_LIMITS[name], (row['id'], field))
+
+    def test_long_requirement_lists_keep_every_item_up_to_the_limit(self):
+        items = [f'Requirement number {n}' for n in range(12)]
+        self.load(self.detail(requirements=items))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.requirements_list, items)
+
+    def test_a_newer_edition_replaces_the_older_place_dates_and_sources(self):
+        OpportunityProgram.objects.filter(pk=self.program.pk).update(
+            country='United States', city='Washington DC', start_date='2025-04-03', end_date='2025-04-05', deadline_text='2025 deadline', deadline='2025-01-01',
+        )
+        self.load(self.detail(edition_core={
+            'country': 'Switzerland', 'city': 'Geneva', 'start_date': '2027-02-10', 'end_date': None, 'deadline': '2026-12-01',
+            'deadline_text': 'Apply by December 1, 2026', 'sources': ['https://www.theearthprize.org/2027', 'https://forms.gle/x'],
+        }))
+        self.program.refresh_from_db()
+        self.assertEqual((self.program.country, self.program.city), ('Switzerland', 'Geneva'))
+        self.assertEqual((str(self.program.start_date), self.program.end_date, str(self.program.deadline)), ('2027-02-10', None, '2026-12-01'))
+        self.assertEqual((self.program.deadline_text, self.program.official_sources), ('Apply by December 1, 2026', ['https://www.theearthprize.org/2027']))
+        self.assertIn('1 unchanged', self.load(self.detail(edition_core={
+            'country': 'Switzerland', 'city': 'Geneva', 'start_date': '2027-02-10', 'end_date': None, 'deadline': '2026-12-01',
+            'deadline_text': 'Apply by December 1, 2026', 'sources': ['https://www.theearthprize.org/2027'],
+        })))
 
     def test_the_serializer_exposes_the_detail_fields(self):
         from apps.admissions.serializers import OpportunityProgramSerializer

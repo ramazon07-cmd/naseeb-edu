@@ -17,12 +17,11 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
-from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
-from django.core.validators import URLValidator
 from django.db import transaction
 
 from apps.admissions.models import OpportunityProgram
+from apps.admissions.program_details import LIST_LIMITS, clean_people, clean_strings, link, text
 
 PROGRAM_TYPES = {'national', 'international'}
 DELIVERY = {'onsite', 'online', 'hybrid'}
@@ -30,24 +29,6 @@ DEFAULT_FILE = Path(__file__).resolve().parents[2] / 'catalog_data' / 'official_
 # Aggregators, forms and social pages are never an official source.
 BLOCKED_HOSTS = ('opportunitiescorners', 'scholarshipscorner', 'opportunitydesk', 'docs.google', 'forms.gle', 'airtable', 'instagram', 'facebook')
 DETAILS_FILE = DEFAULT_FILE.with_name('programs_details.json')
-LINKEDIN_PROFILE = re.compile(r'^https://([a-z]{2,3}\.)?linkedin\.com/in/[^/?#\s]+/?$', re.I)
-MAX_PEOPLE = 5
-url_check = URLValidator(schemes=['http', 'https'])
-
-
-def text(value, limit):
-    return value.strip()[:limit] if isinstance(value, str) and value.strip() else None
-
-
-def link(value, limit=1000):
-    value = text(value, limit + 1)
-    if not value or len(value) > limit:
-        return None
-    try:
-        url_check(value)
-    except ValidationError:
-        return None
-    return value
 
 
 def official(url):
@@ -135,48 +116,40 @@ def changes_for(row):
     return values
 
 
-def text_list(value, limit=6, size=240):
-    if not isinstance(value, list):
-        return None
-    items = [text(item, size) for item in value if isinstance(item, str)]
-    return [item for item in items if item][:limit] or None
-
-
-def people(value):
-    """Up to five {name, role, year, linkedin_url, source_url}; each needs a name and a working source link."""
-    if not isinstance(value, list):
-        return None
-    kept, seen = [], set()
-    for entry in value:
-        if not isinstance(entry, dict):
-            continue
-        name, source = text(entry.get('name'), 120), link(entry.get('source_url'))
-        if not name or not source or name.lower() in seen:
-            continue
-        profile = link(entry.get('linkedin_url'), 300)
-        year = entry.get('year')
-        seen.add(name.lower())
-        kept.append({
-            'name': name, 'role': text(entry.get('role'), 60) or '',
-            'year': year if isinstance(year, int) and not isinstance(year, bool) and 1990 <= year <= 2100 else None,
-            'linkedin_url': profile if profile and LINKEDIN_PROFILE.match(profile) else None,
-            'source_url': source,
-        })
-    return kept[:MAX_PEOPLE] or None
-
-
 def detail_changes_for(row):
     """The detail fields a programs_details.json row states. Empty or null values are left out."""
     values = {
         'overview': text(row.get('overview'), 1200),
         'team_format': text(row.get('team'), 160),
         'selection_process': text(row.get('selection_process'), 1500),
-        'benefits': text_list(row.get('benefits'), 10),
-        'who_can_apply': text_list(row.get('who_can_apply'), 8),
-        'requirements_list': text_list(row.get('requirements'), 8),
-        'past_participants': people(row.get('past_participants_uz')),
+        'benefits': clean_strings(row.get('benefits'), LIST_LIMITS['benefits']),
+        'who_can_apply': clean_strings(row.get('who_can_apply'), LIST_LIMITS['who_can_apply']),
+        'requirements_list': clean_strings(row.get('requirements'), LIST_LIMITS['requirements_list']),
+        'past_participants': clean_people(row.get('past_participants_uz')),
     }
     return {name: value for name, value in values.items() if value is not None}
+
+
+def edition_changes_for(detail):
+    """When the details describe a newer edition than programs.json, `edition_core` carries that one edition's
+    place and dates. These replace the older values (an empty city or date clears a stale one), so a program
+    never shows one edition's overview next to another edition's location and dates."""
+    core = detail.get('edition_core')
+    if not isinstance(core, dict):
+        return {}
+    # Only the keys the edition states are touched; a stated null clears the older edition's value.
+    values = {}
+    for name, convert in (('country', lambda v: text(v, 120) or ''), ('city', lambda v: text(v, 120) or ''), ('start_date', day), ('end_date', day),
+                          ('deadline', day), ('deadline_text', lambda v: text(v, 2000) or '')):
+        if name in core:
+            values[name] = convert(core[name])
+    if text(core.get('title'), 220):
+        values['title'] = text(core.get('title'), 220)
+    sources = [item for item in (link(entry) for entry in core.get('sources') or [] if isinstance(entry, str)) if item and official(item)]
+    if sources:
+        values['official_sources'] = sources
+        values['source_url'] = sources[0]
+    return values
 
 
 class Command(BaseCommand):
@@ -225,6 +198,7 @@ class Command(BaseCommand):
             values = changes_for(row)
             detail = details.get(row['id'], {})
             values.update(detail_changes_for(detail))
+            values.update(edition_changes_for(detail))
             # Facts the catalog row lacks are filled from the details; an existing value is never replaced.
             for name, found in (('country', text(detail.get('country'), 120)), ('eligible_ages', text(detail.get('age_range'), 160))):
                 if found and not values.get(name) and not getattr(program, name):
