@@ -8,7 +8,7 @@ loaded is used.
 from django.db.models import CharField, FloatField, IntegerField, Max, OuterRef, Prefetch, Subquery, Value
 
 from .models import UniversitySubjectRank
-from .subjects import AREAS, SUBJECTS, subjects_for_major
+from .subjects import AREAS, SUBJECTS, subject_indicators, subjects_for_major
 
 LATEST_ATTR = 'latest_subject_ranks'
 
@@ -33,13 +33,32 @@ def with_subject_rank(queryset, code, year):
     )
 
 
-def subject_rank_row(university, code, year):
-    """The annotated rank of one university, or None when it is not ranked in the subject."""
+def subject_rank_row(university, code, year, values=None):
+    """The annotated rank of one university, or None when it is not ranked in the subject.
+
+    ``values`` are its indicator scores in the order of ``subject_columns`` (see ``indicator_values``)."""
     if getattr(university, 'subject_rank', None) is None:
         return None
     return {
         'code': code, 'rank': university.subject_rank, 'label': university.subject_rank_label or '',
-        'score': university.subject_score, 'year': year,
+        'score': university.subject_score, 'year': year, 'values': values if values is not None else [],
+    }
+
+
+def subject_columns(code):
+    """The indicators the subject is scored by, as the Subject rankings table lists them."""
+    return [{'key': name, 'weight': weight} for name, weight in subject_indicators(code)]
+
+
+def indicator_values(university_ids, code, year):
+    """``{university id: [indicator scores]}`` for the page's universities, in one query."""
+    fields = [f'{name}_score' for name, _ in subject_indicators(code)]
+    if year is None or not fields or not university_ids:
+        return {}
+    rows = UniversitySubjectRank.objects.filter(university_id__in=university_ids, subject_code=code, year=year)
+    return {
+        row['university_id']: [None if row[field] is None else float(row[field]) for field in fields]
+        for row in rows.values('university_id', *fields)
     }
 
 

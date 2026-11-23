@@ -6,7 +6,7 @@ import { createPageCache, mergePage } from '../lib/pagedList';
 // a slow connection the rows on screen always come first.
 const PREFETCH_DELAY_MS = 800;
 
-const INITIAL = { query: null, version: null, rows: [], count: 0, unpricedCount: 0, next: null, facets: null, loading: true, loadingMore: false, error: '' };
+const INITIAL = { query: null, version: null, rows: [], subject: null, count: 0, unpricedCount: 0, next: null, facets: null, loading: true, loadingMore: false, error: '' };
 
 /**
  * College Search, one page at a time. `query` comes from collegeSearchQuery() (null waits: nothing is
@@ -72,7 +72,7 @@ export function useCollegeSearch(query, version = 0) {
     page(1).then((payload) => {
       if (own.signal.aborted) return;
       setState((previous) => ({
-        query, version, rows: payload.results, count: payload.count, unpricedCount: payload.unpriced_count ?? 0, next: payload.next,
+        query, version, rows: payload.results, subject: payload.subject ?? null, count: payload.count, unpricedCount: payload.unpriced_count ?? 0, next: payload.next,
         facets: facets.current.get(version) || payload.facets || previous.facets, loading: false, loadingMore: false, error: '',
       }));
       prefetch(payload.next);

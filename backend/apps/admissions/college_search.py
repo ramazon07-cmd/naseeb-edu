@@ -27,7 +27,7 @@ from .listing import MAX_SEARCH_LENGTH, search_terms, term_query
 from .models import StudentProfile, University, UniversityProgram
 from .pricing import with_cost
 from .student_rubric import rubric
-from .subject_ranks import latest_year, subject_rank_row, with_subject_rank
+from .subject_ranks import indicator_values, latest_year, subject_columns, subject_rank_row, with_subject_rank
 from .subjects import SUBJECTS
 
 PAGE_SIZES = (10, 25, 50, 100)
@@ -56,7 +56,7 @@ ORDERINGS = {
     'deadline': (F('application_deadline').asc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
     'acceptance': (F('acceptance_rate').desc(nulls_last=True), F('ranking').asc(nulls_last=True), 'id'),
     # Best rank in the selected subject first, universities not ranked in it last (needs ``subject``).
-    'subject': (F('subject_rank').asc(nulls_last=True), F('ranking').asc(nulls_last=True), 'name', 'id'),
+    'subject': (F('subject_rank').asc(nulls_last=True), F('subject_score').desc(nulls_last=True), F('ranking').asc(nulls_last=True), 'name', 'id'),
 }
 SORTS = (*ORDERINGS, 'fit')
 # The profile answers scoring needs; College Research asks for the missing ones. Test scores
@@ -505,10 +505,11 @@ def serialize_rows(universities, ctx, subject=None):
     from .serializers import UniversityRowSerializer
 
     rows = UniversityRowSerializer(universities, many=True).data
+    values = indicator_values([university.pk for university in universities], *subject) if subject else {}
     for row, university in zip(rows, universities):
         row['programs'] = [{'name': program.name, 'canonical_major': program.canonical_major} for program in university.programs.all()]
         if hasattr(university, 'subject_rank'):
-            row['subject_rank'] = subject_rank_row(university, *subject)
+            row['subject_rank'] = subject_rank_row(university, *subject, values.get(university.pk))
         if ctx is not None:
             row['fit'] = score_university(university, ctx)
     return rows
@@ -589,6 +590,9 @@ def college_search(profile, params):
         'next': params['page'] + 1 if start + size < count else None,
         'results': serialize_rows(page, ctx, subject),
     }
+    if subject:
+        # What the subject's score columns are (the same indicators as the Subject rankings view).
+        data['subject'] = {'code': subject[0], 'year': subject[1], 'indicators': subject_columns(subject[0])}
     if params['price'] != 'all' and params['page'] == 1:
         # Matching rows without a known cost, which the price filter keeps (the first page says it once).
         data['unpriced_count'] = queryset.filter(cost__isnull=True).count()

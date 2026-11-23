@@ -18,7 +18,8 @@ import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { CollegeFilterSelect } from '../components/CollegeFilterSelect';
 import { CollegeMatchPanel } from '../components/CollegeMatch';
 import { SubjectRankChip } from '../components/SubjectRank';
-import { SUBJECT_AREAS } from '../lib/subjects';
+import { SUBJECT_AREAS, subjectName } from '../lib/subjects';
+import { INDICATOR_TITLES, isTopRank, publishedRank, scoreText } from '../lib/subjectRankings';
 import { applicationProgram, bulkAddTier, invalidateMatch } from '../lib/collegeMatch';
 import { QS_CLASSIFICATIONS, QS_TABLE_COLUMNS, institutionStatus, qsClassification, qsScore, qsScoreText } from '../lib/qs';
 import { universityLogoSrc } from '../lib/universityLogos';
@@ -101,17 +102,26 @@ function CollegeProfileStrip({ research, refreshing, onRefresh, onEdit }) {
 
 // One row of results. `university.fit` is the student's fit, sent with the row
 // once their research profile is complete.
-function CollegeRow({ university, detail, detailError, view, application, expanded, busy, compared, compareFull, onCompare, onToggle, onOpen, onAdd }) {
+function CollegeRow({ university, detail, detailError, view, bySubject, application, expanded, busy, compared, compareFull, onCompare, onToggle, onOpen, onAdd }) {
   const fit = university.fit;
   const panelId = `college-details-${university.id}`;
   const days = daysUntil(university.application_deadline);
   const status = institutionStatus(university, t);
   const price = priceInfo(university);
+  // With a subject picked, the QS table is that subject's table: its rank (as QS publishes it), its score and
+  // its own indicators. The overall rank stays as a small line under the name.
+  const ranked = university.subject_rank;
+  const world = rankText(university);
   return <div className={`uni-row ${expanded ? 'is-open' : ''}`.trim()} role="row">
-    <div className="uni-fit" role="cell"><b>{rankText(university)}</b></div>
-    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</small><SubjectRankChip rank={university.subject_rank} /></span></div>
+    {bySubject
+      ? <div className={`uni-fit subj-rank${ranked && isTopRank(ranked.rank, ranked.label) ? ' is-top' : ''}`} role="cell"><b>{ranked ? publishedRank(ranked.rank, ranked.label) : '—'}</b></div>
+      : <div className="uni-fit" role="cell"><b>{rankText(university)}</b></div>}
+    <div className="uni-name" role="cell"><UniversityLogo university={university} /><span><button type="button" onClick={onOpen}>{university.name}</button><small>{[university.city, university.country].filter(Boolean).join(', ')}{status ? ` · ${status}` : ''}</small>{bySubject ? world !== '—' && <small className="uni-world-rank">{t('World {n}', { n: world })}</small> : <SubjectRankChip rank={university.subject_rank} />}</span></div>
     <div className="uni-facts">
-      {view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <div className={`uni-value ${code === 'overall' ? 'qs-score-primary' : ''}`} role="cell" data-label={t(title)} key={code}><span className="v">{qsScoreText(qsScore(university.qs_data, code))}</span></div>) : <>
+      {bySubject ? <>
+        <div className="uni-value qs-score-primary" role="cell" data-label={t('{name} score', { name: subjectName(bySubject.code) })}><span className="v">{scoreText(ranked?.score)}</span></div>
+        {bySubject.indicators.map((indicator, index) => <div className="uni-value" role="cell" data-label={t(INDICATOR_TITLES[indicator.key])} key={indicator.key}><span className="v">{scoreText(ranked?.values?.[index])}</span></div>)}
+      </> : view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <div className={`uni-value ${code === 'overall' ? 'qs-score-primary' : ''}`} role="cell" data-label={t(title)} key={code}><span className="v">{qsScoreText(qsScore(university.qs_data, code))}</span></div>) : <>
       <div className="uni-value uni-score" role="cell" data-label={t("Fit")}><span className="v">{fit ? <>{formatNumberLocale(fit.match_score)}<small>/100</small></> : '—'}</span></div>
       <div className="uni-band" role="cell" data-label={t("Band")}>{fit?.admission_band ? <TierBand value={fit.admission_band} /> : <span className="muted-copy">—</span>}</div>
       <div className="uni-value" role="cell" data-label={t("Acceptance")}><span className="v">{percentText(university.acceptance_rate)}</span></div>
@@ -298,6 +308,8 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
   // The Subject rankings view has its own paged request, so College Search asks for nothing while it is open.
   const search = useCollegeSearch(inSubjects ? null : collegeSearchQuery({ query: searchTerm, filters, qsFilters, sort, view, pageSize, subject, subjectOnly }), researchVersion);
   const rows = search.rows;
+  // The QS table shows the selected subject's own rank and scores once the rows come with them.
+  const bySubject = view === 'qs' && subject && search.subject?.code === subject ? search.subject : null;
   // The open university's fit as its row on screen has it, when that row is for the current profile.
   const rowFit = universityId != null && search.version === researchVersion ? rows.find((item) => item.id === universityId)?.fit : undefined;
   const facets = search.facets || EMPTY_FACETS;
@@ -570,7 +582,7 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
       <section className="college-toolbar" aria-label={t('University data view')} ref={resultsRef}>
         <header className="college-toolbar-header">
           {ready && <MatchTabs filters={filters} sort={sort} onPick={(tab) => { setFilters((current) => ({ ...current, bands: tab === 'matches' ? MATCH_BANDS : COLLEGE_BANDS })); setSort(tab === 'matches' ? 'fit' : 'ranking'); if (tab === 'matches' && view !== 'admissions') { setView('admissions'); setExpandedId(null); } }} />}
-          <div className="college-data-views" role="group" aria-label={t('University data view')}>{[['qs', 'QS rankings'], ['subjects', 'Subject rankings'], ['admissions', 'Admissions & costs']].map(([key, title]) => <button type="button" key={key} aria-pressed={view === key} onClick={() => { setView(key); setExpandedId(null); setSort(key === 'admissions' ? 'fit' : 'ranking'); }}>{t(title)}{key === 'qs' && <span className="college-edition">2027</span>}</button>)}</div>
+          <div className="college-data-views" role="group" aria-label={t('University data view')}>{[['qs', 'QS rankings'], ['subjects', 'Subject rankings'], ['admissions', 'Admissions & costs']].map(([key, title]) => <button type="button" key={key} aria-pressed={view === key} onClick={() => { setView(key); setExpandedId(null); setSort(key === 'admissions' ? 'fit' : key === 'qs' && subject ? 'subject' : 'ranking'); }}>{t(title)}{key === 'qs' && <span className="college-edition">2027</span>}</button>)}</div>
           <button type="button" className="college-saved-button" onClick={() => setListOpen(true)} aria-label={t('My college list')}><Bookmark size={17} aria-hidden="true" /><span>{t('My List')}</span><b>{formatNumberLocale(data.applications.length)}</b></button>
         </header>
         {!inSubjects && <SubjectPicker subject={subject} only={subjectOnly} onOnly={setOnlyPick} onSubject={(code) => { setSubjectPick(code); setOnlyPick(null); if (code && sort === 'ranking') setSort('subject'); }} />}
@@ -594,9 +606,9 @@ export function CollegeSearchPage({ data, query, reload, notify, setPage, univer
         {search.loading && !rows.length && <p className="uni-loading" role="status">{t("Loading universities…")}</p>}
         {!search.loading && !search.error && !rows.length && <Empty text={t("No universities match these filters.")} />}
       </div>}
-      {!showCards && <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''} ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} role="table" aria-label={t("Universities")} aria-busy={search.loading}>
-        <div className="uni-row uni-head" role="row"><span role="columnheader">{t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts">{view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <span role="columnheader" key={code}>{t(title)}</span>) : <><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Cost per year")}</span><span role="columnheader">{t("Deadline")}</span></>}</div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t(view === 'qs' ? "Show QS details" : "Show why this result")}</span></div>
-        {rows.map((item) => <CollegeRow key={item.id} view={view} university={item} detail={details[item.id]} detailError={detailError} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} compared={compareMap.has(item.id)} compareFull={compareMap.size >= 3} onCompare={() => toggleCompare(item)} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item, item.fit)} />)}
+      {!showCards && <div className={`uni-table ${view === 'qs' ? 'qs-table' : ''} ${bySubject ? 'by-subject' : ''} ${search.loading && rows.length ? 'is-refreshing' : ''}`.trim()} role="table" aria-label={t("Universities")} aria-busy={search.loading} style={bySubject ? { '--subj-cols': bySubject.indicators.length + 1 } : undefined}>
+        <div className="uni-row uni-head" role="row"><span role="columnheader">{bySubject ? t("Subject rank") : t("Rank")}</span><span role="columnheader">{t("University")}</span><div className="uni-facts">{bySubject ? <><span role="columnheader">{t('{name} score', { name: subjectName(bySubject.code) })}</span>{bySubject.indicators.map((indicator) => <span role="columnheader" key={indicator.key}>{t(INDICATOR_TITLES[indicator.key])}</span>)}</> : view === 'qs' ? QS_TABLE_COLUMNS.map(([code, title]) => <span role="columnheader" key={code}>{t(title)}</span>) : <><span role="columnheader">{t("Fit")}</span><span role="columnheader">{t("Band")}</span><span role="columnheader">{t("Acceptance")}</span><span role="columnheader">{t("SAT")}</span><span role="columnheader">{t("Cost per year")}</span><span role="columnheader">{t("Deadline")}</span></>}</div><span role="columnheader" className="sr-only">{t("Add to my list")}</span><span role="columnheader" className="sr-only">{t(view === 'qs' ? "Show QS details" : "Show why this result")}</span></div>
+        {rows.map((item) => <CollegeRow key={item.id} view={view} bySubject={bySubject} university={item} detail={details[item.id]} detailError={detailError} application={listed.get(item.id)} expanded={expandedId === item.id} busy={busyId === item.id} compared={compareMap.has(item.id)} compareFull={compareMap.size >= 3} onCompare={() => toggleCompare(item)} onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)} onOpen={() => openUniversity(item.id)} onAdd={() => addToList(item, item.fit)} />)}
         {search.loading && !rows.length && <p className="uni-loading" role="status">{t("Loading universities…")}</p>}
         {!search.loading && !search.error && !rows.length && <Empty text={t("No universities match these filters.")} />}
       </div>}
