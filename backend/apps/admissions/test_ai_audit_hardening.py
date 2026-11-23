@@ -3,6 +3,7 @@ refunds, usage accounting, plan checks, grounding and the Telegram import's dead
 import json
 import os
 import tempfile
+import threading
 import time
 from io import StringIO
 from unittest import mock
@@ -322,6 +323,15 @@ class UsageAccountingTests(TestCase):
                                       provider='claude_cli', extra_attempt=extra)
         report = _today_from_log({self.school.pk: 'Usage School'})
         self.assertEqual(report['essay_coach']['used'], 1)
+
+    def test_the_log_fallback_counts_telegram_repair_calls_but_not_a_coach_second_step(self):
+        from .views.admin_portal import _today_from_log
+
+        for feature in ('telegram_import', 'essay_coach'):
+            for extra in (False, True):
+                AiUsageLog.objects.create(feature=feature, status='ok', provider='claude_cli', extra_attempt=extra)
+        report = _today_from_log({})
+        self.assertEqual((report['telegram_import']['used'], report['essay_coach']['used']), (2, 1))
 
     def test_a_failed_step_without_an_answer_is_recorded_as_refunded(self):
         from .essay_lab import coach
@@ -843,6 +853,25 @@ class BoundedCallTests(SimpleTestCase):
             with self.assertRaises(TimeoutError):
                 fetch.fetch_html('examplechannel', deadline=time.monotonic() + 0.2)
         self.assertLess(time.monotonic() - started, 1.0)
+
+    def test_a_close_that_blocks_cannot_hold_the_caller_past_the_deadline(self):
+        from . import deadline_io
+
+        release = threading.Event()
+        started = time.monotonic()
+        with self.assertRaises(TimeoutError):
+            deadline_io.run_bounded(lambda: time.sleep(3), 0.2, on_timeout=lambda: release.wait(5))
+        self.assertLess(time.monotonic() - started, 0.7)
+        release.set()
+
+    def test_abort_response_shuts_the_raw_socket_down_before_closing(self):
+        from . import deadline_io
+
+        events = []
+        sock = mock.Mock(shutdown=lambda how: events.append('shutdown'))
+        response = mock.Mock(fp=mock.Mock(raw=mock.Mock(_sock=sock)), close=lambda: events.append('close'))
+        deadline_io.abort_response(response)
+        self.assertEqual(events, ['shutdown', 'close'])
 
     def test_errors_and_results_pass_through(self):
         from . import deadline_io

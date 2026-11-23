@@ -192,7 +192,7 @@ def fetch_html(channel, before=None, deadline=None):
 
     def close():
         with contextlib.suppress(Exception):
-            holder['response'].close()
+            deadline_io.abort_response(holder['response'])
 
     # Socket timeouts only limit silence; the whole exchange (headers and body) ends at the deadline.
     deadline_io.run_bounded(call, stop_at - time.monotonic(), close)

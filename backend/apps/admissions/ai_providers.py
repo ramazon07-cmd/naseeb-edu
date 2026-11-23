@@ -185,7 +185,7 @@ def _gateway(body, timeout):
 
     def close():
         with contextlib.suppress(Exception):
-            holder['response'].close()
+            deadline_io.abort_response(holder['response'])
 
     # The socket timeout only limits silence: the whole exchange (headers and body) is cut off at `timeout`.
     return deadline_io.run_bounded(call, timeout, close)
