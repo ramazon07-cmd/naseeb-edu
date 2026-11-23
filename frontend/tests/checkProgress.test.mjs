@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CAP, DEFAULT_EXPECTED_MS, HISTORY_KEY, MAX_EXPECTED_MS, MIN_EXPECTED_MS, STAGES,
+  createCheckTimer, CAP, DEFAULT_EXPECTED_MS, HISTORY_KEY, MAX_EXPECTED_MS, MIN_EXPECTED_MS, STAGES,
   expectedDuration, expectedFromHistory, progressFraction, readDurations, recordDuration, secondsLeft, stageIndex,
 } from '../src/lib/checkProgress.js';
 
@@ -55,6 +55,32 @@ test('history is stored, trimmed to five, and ignores instant results', () => {
   [20000, 30000, 40000, 50000, 60000, 70000].forEach((ms) => recordDuration(ms, store));
   assert.deepEqual(readDurations(store), [30000, 40000, 50000, 60000, 70000]);
   assert.equal(expectedDuration(store), 50000);
+});
+
+test('timer keeps its start across observers and records only on success', () => {
+  const store = memory();
+  let clock = 1000;
+  const timer = createCheckTimer({ now: () => clock, store });
+  assert.equal(timer.state(), null);
+  timer.start();
+  clock += 5000;
+  assert.equal(timer.state().startedAt, 1000, 'reading state does not restart or record');
+  assert.deepEqual(readDurations(store), []);
+  clock += 25000;
+  timer.succeed();
+  assert.deepEqual(readDurations(store), [30000]);
+  assert.equal(timer.state(), null);
+});
+
+test('a failed check records nothing', () => {
+  const store = memory();
+  let clock = 0;
+  const timer = createCheckTimer({ now: () => clock, store });
+  timer.start();
+  clock = 40000;
+  timer.fail();
+  timer.succeed();
+  assert.deepEqual(readDurations(store), []);
 });
 
 test('broken or unavailable storage falls back to the default', () => {

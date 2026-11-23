@@ -47,6 +47,7 @@ import {
   createSessionRegistry, createTabSession, discardLocalDraft, keepLocalDraft, saveProblem, syncTabs, unsavedTabs,
 } from './sessions.js'
 import { createTabOpener } from './tabsModel.js'
+import { checkTimer } from '../lib/checkProgress.js'
 
 const STATS_DEBOUNCE_MS = 250
 const WELCOME_AFTER_MS = 30 * 60 * 1000
@@ -726,6 +727,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
   const runCheck = useCallback(async () => {
+    checkTimer.start()
     setCheckStatus({ loading: true, error: null })
     setCoachNotice(null)
     setPanel('coach')
@@ -740,6 +742,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
           if (error?.status !== 409 || attempt === 1 || serverNotice(error)) throw error
         }
       }
+      checkTimer.succeed()
       setCheck(result)
       setNoteStates(result.note_states || {})
       setCurrentInputHash(result.current_input_hash || null)
@@ -753,6 +756,7 @@ function TabEditor({ session, essay, tabTitle, tabWords, user, notify, focusMode
         setHistoryVersion((value) => value + 1) // the check made a checkpoint
       }
     } catch (error) {
+      checkTimer.fail()
       if (serverNotice(error) === 'notes_open') {
         // Show the server's view of the notes instead of a dead end (one GET).
         goneSent.current.clear()

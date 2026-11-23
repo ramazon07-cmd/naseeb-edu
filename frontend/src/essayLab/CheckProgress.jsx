@@ -1,49 +1,45 @@
 import { useEffect, useRef, useState } from 'react'
 import { t, tp } from '../i18n.js'
-import { STAGES, expectedDuration, progressFraction, recordDuration, secondsLeft, stageIndex } from '../lib/checkProgress.js'
+import { DEFAULT_EXPECTED_MS, STAGES, checkTimer, progressFraction, secondsLeft, stageIndex } from '../lib/checkProgress.js'
 
 const TICK_MS = 500
 const FINISH_MS = 450
 
 // Estimated progress for the Naseeb AI check. Purely client-side: it is driven by
-// elapsed time, never by extra requests. `active` is true while the check runs;
-// when it ends without `failed`, the bar fills to 100% briefly and goes away.
+// elapsed time, never by extra requests. The start time lives in checkTimer (set
+// where the request starts), so hiding and reopening the panel resumes the bar.
+// When the check ends without `failed`, the bar fills to 100% briefly and goes away.
 export default function CheckProgress({ active, failed = false }) {
-  const [elapsed, setElapsed] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
   const [finishing, setFinishing] = useState(false)
-  const startedAt = useRef(0)
-  const expected = useRef(0)
+  const fallbackStart = useRef(Date.now())
+  const wasActive = useRef(false)
 
   useEffect(() => {
     if (!active) return undefined
-    startedAt.current = Date.now()
-    expected.current = expectedDuration()
-    setElapsed(0)
-    setFinishing(false)
-    const timer = window.setInterval(() => setElapsed(Date.now() - startedAt.current), TICK_MS)
-    return () => {
-      window.clearInterval(timer)
-      if (startedAt.current) {
-        const took = Date.now() - startedAt.current
-        startedAt.current = 0
-        if (!failedRef.current) { recordDuration(took); setFinishing(true) }
-      }
-    }
+    fallbackStart.current = Date.now()
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), TICK_MS)
+    return () => window.clearInterval(timer)
   }, [active])
 
-  const failedRef = useRef(failed)
-  failedRef.current = failed
-
   useEffect(() => {
-    if (!finishing) return undefined
+    if (active) { wasActive.current = true; setFinishing(false); return undefined }
+    if (!wasActive.current) return undefined
+    wasActive.current = false
+    if (failed) return undefined
+    setFinishing(true)
     const timer = window.setTimeout(() => setFinishing(false), FINISH_MS)
     return () => window.clearTimeout(timer)
-  }, [finishing])
+  }, [active, failed])
 
   if (!active && !(finishing && !failed)) return null
 
+  const pending = checkTimer.state()
+  const startedAt = pending?.startedAt ?? fallbackStart.current
+  const total = pending?.expected || DEFAULT_EXPECTED_MS
+  const elapsed = Math.max(0, now - startedAt)
   const done = !active
-  const total = expected.current || expectedDuration()
   const fraction = done ? 1 : progressFraction(elapsed, total)
   const percent = Math.round(fraction * 100)
   const left = done ? 0 : secondsLeft(elapsed, total)
@@ -51,7 +47,9 @@ export default function CheckProgress({ active, failed = false }) {
   const timeText = done ? t('Done') : left === null ? t('Almost done…') : tp('About {n} seconds left', left, { n: left })
 
   return <div className="el-check-progress">
-    <div className="el-check-progress-top">
+    {/* Announced politely when the check starts and when the stage changes, not on every tick. */}
+    <span className="el-sr-only" role="status" aria-live="polite">{done ? '' : stage}</span>
+    <div className="el-check-progress-top" aria-hidden="true">
       <strong>{stage}…</strong>
       <span>{timeText}</span>
     </div>

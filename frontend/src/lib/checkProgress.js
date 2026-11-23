@@ -72,3 +72,18 @@ export function recordDuration(ms, store) {
 export function expectedDuration(store) {
   return expectedFromHistory(readDurations(store))
 }
+
+// Tracks the one pending check outside any component, so hiding the panel or
+// entering focus mode neither restarts the bar nor records a bogus duration.
+export function createCheckTimer({ now = () => Date.now(), store } = {}) {
+  let pending = null
+  return {
+    start() { pending = { startedAt: now(), expected: expectedDuration(store) } },
+    // Only a successful response is a real duration.
+    succeed() { if (pending) recordDuration(now() - pending.startedAt, store); pending = null },
+    fail() { pending = null },
+    state() { return pending },
+  }
+}
+
+export const checkTimer = createCheckTimer()
