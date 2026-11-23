@@ -862,7 +862,7 @@ def _call_timeout(deadline):
     return min(settings.ESSAY_COACH_TIMEOUT_SECONDS, remaining)
 
 
-def _request_gateway(messages, max_tokens, deadline):
+def _request_gateway(messages, max_tokens, deadline, required_keys=()):
     """One non-streaming JSON-mode call. Pinned model, temperature 0, no fallback model."""
     body = {
         'model': ai_providers.active_model(settings.ESSAY_COACH_MODEL),
@@ -883,7 +883,7 @@ def _request_gateway(messages, max_tokens, deadline):
         body.pop('reasoning_effort')
         payload = ai_providers.chat(body, _call_timeout(deadline), deadline=deadline)
     ai_usage.capture(payload, body)
-    return ai_providers.extract_json(payload['choices'][0]['message']['content'])
+    return ai_providers.extract_json(payload['choices'][0]['message']['content'], required_keys)
 
 
 def gateway_configured():
@@ -936,7 +936,7 @@ class CheckSpec:
     score_hidden: str = ''
 
 
-def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call, extra_attempt=False):
+def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call, extra_attempt=False, required_keys=()):
     """One billed call, recorded in ai_usage. Never retried (the only retry is the reasoning_effort 400).
 
     A failure that cost nothing (no CLI slot, a CLI error, a refused gateway request) is recorded as refunded;
@@ -944,7 +944,7 @@ def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call,
     before_call()  # hand the database connection back for the length of the provider call
     ai_usage.begin()
     try:
-        validated = validate(_request_gateway(messages, max_tokens, deadline))
+        validated = validate(_request_gateway(messages, max_tokens, deadline, required_keys))
     except _PROVIDER_ERRORS as exc:
         ai_usage.record(
             spec.feature, user, provider=ai_providers.provider(), status=ai_usage.FAILED,

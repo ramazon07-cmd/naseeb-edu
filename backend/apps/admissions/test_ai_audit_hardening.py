@@ -7,6 +7,7 @@ import time
 from io import StringIO
 from unittest import mock
 
+from django.conf import settings
 from django.core import checks
 from django.core.cache import cache
 from django.core.management import call_command
@@ -56,6 +57,7 @@ class CliContractTests(SimpleTestCase):
             'SECRET_KEY': 'django-secret', 'DATABASE_URL': 'postgres://u:p@h/db', 'AI_GATEWAY_API_KEY': 'gw-key',
             'REDIS_URL': 'redis://r', 'TELEGRAM_BOT_TOKEN': 'bot', 'AWS_SECRET_ACCESS_KEY': 'aws',
             'PATH': '/usr/bin', 'LANG': 'C.UTF-8', 'CLAUDE_CODE_OAUTH_TOKEN': 'login-token',
+            'ANTHROPIC_API_KEY': 'sk-api', 'ANTHROPIC_AUTH_TOKEN': 'api-token',  # would switch the CLI to per-call billing
         }
         with mock.patch.dict(os.environ, secrets, clear=True), override_settings(AI_CLI_HOME='/var/data/claude'):
             env = ai_providers._cli_environment()
@@ -63,7 +65,8 @@ class CliContractTests(SimpleTestCase):
                          {'PATH', 'LANG', 'CLAUDE_CODE_OAUTH_TOKEN', 'HOME'})
         self.assertEqual(env['HOME'], '/var/data/claude')
         self.assertEqual((env['DISABLE_AUTOUPDATER'], env['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC']), ('1', '1'))
-        for name in ('SECRET_KEY', 'DATABASE_URL', 'AI_GATEWAY_API_KEY', 'REDIS_URL', 'TELEGRAM_BOT_TOKEN'):
+        for name in ('SECRET_KEY', 'DATABASE_URL', 'AI_GATEWAY_API_KEY', 'REDIS_URL', 'TELEGRAM_BOT_TOKEN',
+                     'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'):
             self.assertNotIn(name, env)
 
     def test_a_real_child_process_gets_that_environment_and_the_prompt_on_stdin(self):
@@ -177,18 +180,22 @@ class JsonExtractorTests(SimpleTestCase):
         self.assertEqual(extract('Here is the result:\n{"a": 1}'), {'a': 1})
         self.assertEqual(extract('```json\n{"a": {"b": "}"}}\n```\nDone.'), {'a': {'b': '}'}})
         self.assertEqual(extract('note {not json} then {"ok": true}'), {'ok': True})
-        for bad in ('', 'nothing here', '{"cut": ', '[1, 2]'):
+        self.assertEqual(extract('The shape is {}. Here: {"a": 1}'), {'a': 1})
+        self.assertEqual(extract('{"x": 1} then {"reasons": {"1": "a"}}', ('reasons',)), {'reasons': {'1': 'a'}})
+        for bad in ('', 'nothing here', '{"cut": ', '[1, 2]', 'only {} here'):
             with self.assertRaises(ValueError):
                 extract(bad)
 
     def test_every_feature_reads_a_reply_with_prose_in_front(self):
         from .essay_lab import coach
 
-        payload = {'choices': [{'message': {'content': 'Here is the result:\n```json\n{"x": 2}\n```'}}], 'usage': {}}
+        answer = {'x': 2, 'suggestions': [], 'major_guidance': []}
+        content = 'The shape is {}. Here is the result:\n```json\n' + json.dumps(answer) + '\n```'
+        payload = {'choices': [{'message': {'content': content}}], 'usage': {}}
         with mock.patch.object(ai_providers, 'chat', return_value=payload):
-            self.assertEqual(coach._request_gateway([{'role': 'user', 'content': 'q'}], 100, time.monotonic() + 60), {'x': 2})
-            self.assertEqual(rec_letter_ai._request_gateway('s', 'u'), {'x': 2})
-        self.assertEqual(education_ai._parse_gateway(json.dumps(payload).encode(), {}), {'x': 2})
+            self.assertEqual(coach._request_gateway([{'role': 'user', 'content': 'q'}], 100, time.monotonic() + 60), answer)
+            self.assertEqual(rec_letter_ai._request_gateway('s', 'u'), answer)
+        self.assertEqual(education_ai._parse_gateway(json.dumps(payload).encode(), {}), answer)
         self.assertIs(formatter.extract_json, ai_providers.extract_json)
 
 
@@ -226,9 +233,15 @@ class MatchReasonGroundingTests(SimpleTestCase):
     def test_a_personal_admission_chance_is_dropped_even_with_a_known_number(self):
         item = {'id': 7, 'admit_rate': 12.0}
         for line in ('Your chance of admission is 12%.', 'The probability that you get in is high.',
-                     'Ваши шансы высоки.', 'Qabul ehtimoli yuqori.'):
+                     'Ваши шансы на поступление высоки.', 'Qabul ehtimoli yuqori.'):
+            self.assertEqual(match_reasons.validate({'reasons': {'7': line}}, [item], {})['7'], '', line)
+        for line in ('Your odds of getting accepted are good.', 'You will be admitted easily.',
+                     'Sizning qabul imkoniyatingiz katta.'):
             self.assertEqual(match_reasons.validate({'reasons': {'7': line}}, [item], {})['7'], '', line)
         kept = 'The university admits about 12% of applicants.'
+        for fine in ("Many opportunities: imkoniyatlar ko'p.", 'Offers a probability and statistics program.',
+                     'Strong chance to build a research portfolio here.'):
+            self.assertEqual(match_reasons.validate({'reasons': {'7': fine}}, [item], {})['7'], fine, fine)
         self.assertEqual(match_reasons.validate({'reasons': {'7': kept}}, [item], {})['7'], kept)
 
 
@@ -562,17 +575,18 @@ class ImportNetworkBoundTests(SimpleTestCase):
 
 
 class CacheSettingsTests(SimpleTestCase):
-    def test_production_without_redis_gets_a_cache_the_workers_share(self):
-        caches = build_cache_settings('', shared_file_dir='/tmp/x-shared')
-        self.assertTrue(caches['default']['BACKEND'].endswith('FileBasedCache'))
-        self.assertEqual(caches['default']['LOCATION'], '/tmp/x-shared')
-
-    def test_redis_and_development_are_unchanged(self):
-        self.assertTrue(build_cache_settings('redis://r:6379')['default']['BACKEND'].endswith('RedisCache'))
+    def test_production_without_redis_is_per_process_memory_not_a_file_cache(self):
+        # A file cache loses the 26 h counters after 5 minutes and is not atomic: never a fallback.
         self.assertTrue(build_cache_settings('')['default']['BACKEND'].endswith('LocMemCache'))
+        self.assertFalse(settings.CACHES['default']['BACKEND'].endswith('FileBasedCache'))
+        with self.assertRaises(TypeError):
+            build_cache_settings('', shared_file_dir='/tmp/x')
 
-    def test_the_deploy_check_still_asks_for_redis(self):
-        with override_settings(DEBUG=False, CACHES=build_cache_settings('', shared_file_dir='/tmp/x')):
+    def test_redis_is_used_when_set(self):
+        self.assertTrue(build_cache_settings('redis://r:6379')['default']['BACKEND'].endswith('RedisCache'))
+
+    def test_the_deploy_check_asks_for_redis(self):
+        with override_settings(DEBUG=False, CACHES=build_cache_settings('')):
             self.assertEqual([item.id for item in shared_cache_check(None)], ['naseeb.W001'])
         with override_settings(DEBUG=False, CACHES=build_cache_settings('redis://r:6379')):
             self.assertEqual(shared_cache_check(None), [])
@@ -698,3 +712,38 @@ class AssistantCliFailureTests(Fixture, APITestCase):
             self.assertEqual(used_today(), 0, error)
             row = AiUsageLog.objects.get(feature='assistant')
             self.assertEqual((row.status, row.refunded), ('provider_error', True), error)
+
+
+class GatewayDeadlineTests(SimpleTestCase):
+    @override_settings(AI_PROVIDER='gateway')
+    def test_the_gateway_timeout_is_clamped_to_the_deadline_and_a_passed_one_fails(self):
+        seen = {}
+        with mock.patch.object(ai_providers, '_gateway', side_effect=lambda body, timeout: seen.update(t=timeout) or {}):
+            ai_providers.chat(BODY, 100, deadline=time.monotonic() + 7)
+            self.assertLessEqual(seen['t'], 7)
+            with self.assertRaises(TimeoutError):
+                ai_providers.chat(BODY, 100, deadline=time.monotonic() - 1)
+
+
+class BacklogTruncationTests(TestCase):
+    def test_a_long_backlog_keeps_cursor_and_posts_consistent(self):
+        # last_message_id=95; pages gathered 100-1199 and stopped with the cursor at 100.
+        state = TelegramImportChannel.objects.create(channel='examplechannel', last_message_id=95)
+        posts = {pk: fetch.Post('examplechannel', pk, f'text {pk}') for pk in range(100, 1200)}
+        backlog = fetch.Backlog(found=posts, before=100)
+        calls = []
+
+        def fetch_page(channel, before=None):
+            calls.append(before)
+            raise importer.StopRun('time_budget')
+
+        run = importer.Run(today=TODAY, catalog=importer.rules.Catalog([]), deadline=time.monotonic() + 100,
+                           hard_deadline=time.monotonic() + 140, fetch=fetch_page)
+        with mock.patch.object(fetch.Backlog, 'load', return_value=backlog):
+            with self.assertRaises(importer.StopRun):
+                importer.run_channel(run, 'examplechannel')
+        state.refresh_from_db()
+        kept = [post['id'] for post in state.backlog_posts]
+        self.assertEqual((len(kept), kept[-1]), (importer.MAX_SAVED_BACKLOG, 1199))
+        # The cursor sits at the oldest kept post, so the dropped posts (100-199) are read again from there.
+        self.assertEqual((kept[0], state.backlog_before), (200, 200))

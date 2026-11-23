@@ -14,7 +14,7 @@ from django.core.cache import cache
 from django.test import override_settings
 from rest_framework import status
 
-from . import ai_budget
+from . import ai_budget, ai_providers
 from .essay_lab import coach
 from .models import AiUsageLog, EssayCheckpoint, EssayDepthCheck, EssayTab
 from .test_essay_lab import (
@@ -861,7 +861,7 @@ class InputHashAndDeadlineTests(CoachApiTestCase):
 
             left = ai_budget.user_remaining('essay_coach', self.student_user)
             fake_time = SimpleNamespace(monotonic=lambda: clock['now'])
-            with mock.patch.object(coach, 'time', fake_time), mock.patch('urllib.request.urlopen', side_effect=urlopen):
+            with mock.patch.object(coach, 'time', fake_time), mock.patch.object(ai_providers, 'time', fake_time), mock.patch('urllib.request.urlopen', side_effect=urlopen):
                 response = self.client.post(f'{BASE}/essays/{self.essay.pk}/depth-check/', {'base_seq': 0},
                                             format='json')
             self.assertEqual(timeouts[0], 40)

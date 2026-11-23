@@ -190,29 +190,14 @@ def is_enabled(value):
 
 def build_cache_settings(
     redis_url, *, key_prefix='naseeb', connect_timeout=0.25, socket_timeout=0.25, health_check_interval=30,
-    shared_file_dir='',
 ):
     """Return CACHES: Redis when ``redis_url`` is set, otherwise per-process memory.
-
-    Production without Redis passes ``shared_file_dir``: a file cache every worker on the machine reads
-    and writes, so the AI budgets, stream limits and throttles are one count across the gunicorn workers
-    instead of one each (per-process memory would multiply every limit by the worker count). It does not
-    reach a second instance; Redis is still the right setting (see the naseeb.W001 deploy check).
 
     Every cache call sits on the request path (throttles, lockouts, budgets), so
     a hung or unreachable Redis must fail within a fraction of a second instead
     of redis-py's 5 s defaults; callers then fail open. No retries: a retry
     only doubles the stall while Redis is down.
     """
-    if not redis_url and shared_file_dir:
-        return {
-            'default': {
-                'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
-                'LOCATION': shared_file_dir,
-                'KEY_PREFIX': key_prefix,
-                'TIMEOUT': 300,
-            }
-        }
     if not redis_url:
         return {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'naseeb-local'}}
     return {

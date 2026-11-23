@@ -219,7 +219,7 @@ def request_gateway(messages, deadline=None, retry_gate=None):
     if not cli:
         return json.loads(re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE))
     try:
-        raw = extract_json(content)
+        raw = extract_json(content, ('is_program',))
         validate(raw)  # only to learn whether the answer is usable; the caller validates again
         return raw
     except ValueError:
@@ -230,7 +230,7 @@ def request_gateway(messages, deadline=None, retry_gate=None):
         body['messages'] = messages + [
             {'role': 'assistant', 'content': str(content)[:2000]}, {'role': 'user', 'content': RETRY_MESSAGE},
         ]
-        return extract_json(_call(body, deadline))
+        return extract_json(_call(body, deadline), ('is_program',))
 
 
 def _text(value, limit):

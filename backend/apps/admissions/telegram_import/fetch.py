@@ -179,7 +179,14 @@ def fetch_html(channel, before=None, deadline=None):
         while len(body) <= MAX_PAGE_BYTES:
             if time.monotonic() >= stop_at:
                 raise TimeoutError('The Telegram page took too long to read.')
-            chunk = response.read(min(READ_CHUNK, MAX_PAGE_BYTES + 1 - len(body)))
+            # Best effort: the socket may block for at most the time left, so a silent peer cannot hold the read
+            # past the deadline; read1 returns as soon as some bytes are there.
+            sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
+            if sock is not None:
+                with contextlib.suppress(OSError, ValueError):
+                    sock.settimeout(max(0.05, stop_at - time.monotonic()))
+            reader = getattr(response, 'read1', response.read)
+            chunk = reader(min(READ_CHUNK, MAX_PAGE_BYTES + 1 - len(body)))
             if not chunk:
                 break
             body += chunk

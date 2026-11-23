@@ -222,7 +222,7 @@ def _parse_gateway(raw, body):
     """Validate a billed provider answer; raises KeyError/IndexError/TypeError/ValueError."""
     payload = json.loads(raw.decode('utf-8'))
     ai_usage.capture(payload, body)
-    return ai_providers.extract_json(payload['choices'][0]['message']['content'])
+    return ai_providers.extract_json(payload['choices'][0]['message']['content'], ('major_guidance',))
 
 
 def _cache_key(profile, context):

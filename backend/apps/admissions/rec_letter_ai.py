@@ -281,7 +281,7 @@ def _request_gateway(system, user):
         body['providerOptions'] = {'gateway': {'models': [settings.AI_ASSISTANT_FALLBACK_MODEL]}}
     payload = ai_providers.chat(body, settings.AI_ASSISTANT_TIMEOUT_SECONDS)
     ai_usage.capture(payload, body)
-    return ai_providers.extract_json(payload['choices'][0]['message']['content'])
+    return ai_providers.extract_json(payload['choices'][0]['message']['content'], ('suggestions',))
 
 
 def validate_ai(raw, facts):

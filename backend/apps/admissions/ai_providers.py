@@ -59,8 +59,9 @@ CLI_ENV_ALLOWLIST = (
     'PATH', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'TZ', 'USER', 'LOGNAME',
     'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS',
     'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy',
-    # How the CLI logs in: its config folder, a subscription token or an API key given to it on purpose.
-    'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN',
+    # How the CLI logs in: its config folder or a subscription token. ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN are
+    # left out on purpose: they would switch the CLI to per-call API billing, and CLI failures are refunded as unbilled.
+    'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN',
 )
 EMPTY_MCP_CONFIG = '{"mcpServers":{}}'
 
@@ -81,23 +82,25 @@ class CliOutputError(ValueError):
     """The claude CLI's output could not be read."""
 
 
-def extract_json(text):
-    """The first complete JSON object in ``text`` (code fences and prose around it are ignored).
+def extract_json(text, required_keys=()):
+    """The first non-empty JSON object in ``text`` (code fences and prose around it are ignored).
 
     One extractor for every feature: the CLI has no JSON mode, so a reply may come as "Here is the result:"
-    plus a fenced object. ValueError when there is no object.
+    plus a fenced object, or mention an empty `{}` first. With ``required_keys`` only an object holding all of
+    them counts. Objects nested inside one already read are not candidates. ValueError when none fits.
     """
     text = str(text or '')
     decoder = json.JSONDecoder()
+    wanted = tuple(required_keys)
     start = text.find('{')
     while start != -1:
         try:
-            value, _ = decoder.raw_decode(text, start)
+            value, end = decoder.raw_decode(text, start)
         except ValueError:
-            value = None
-        if isinstance(value, dict):
+            value, end = None, start + 1
+        if isinstance(value, dict) and value and all(key in value for key in wanted):
             return value
-        start = text.find('{', start + 1)
+        start = text.find('{', end if isinstance(value, dict) else start + 1)
     raise ValueError('No JSON object in the reply.')
 
 
@@ -149,7 +152,12 @@ def chat(body, timeout, *, override='', slot_wait=None, reserve=0, deadline=None
     """
     if uses_cli(override):
         return _claude_cli(body, timeout, slot_wait=slot_wait, reserve=reserve, deadline=deadline)
-    return _gateway(body, timeout)  # the caller has already cut `timeout` to what its deadline leaves
+    if deadline is not None:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise CliTimeout('The deadline passed before the call started.')
+        timeout = min(timeout, left)
+    return _gateway(body, timeout)
 
 
 def _gateway(body, timeout):

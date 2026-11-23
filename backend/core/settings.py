@@ -1,7 +1,6 @@
 import os
 import secrets
 import sys
-import tempfile
 from datetime import timedelta
 from pathlib import Path
 from corsheaders.defaults import default_headers
@@ -387,8 +386,6 @@ CACHES = build_cache_settings(
     connect_timeout=config('REDIS_CONNECT_TIMEOUT', default=0.25, cast=float),
     socket_timeout=config('REDIS_SOCKET_TIMEOUT', default=0.25, cast=float),
     health_check_interval=config('REDIS_HEALTH_CHECK_INTERVAL', default=30, cast=int),
-    # Production without Redis: one file cache for all gunicorn workers on the machine (see build_cache_settings).
-    shared_file_dir=str(Path(tempfile.gettempdir()) / 'naseeb-shared-cache') if IS_PRODUCTION and not DEBUG else '',
 )
 
 AUTH_PASSWORD_VALIDATORS = [

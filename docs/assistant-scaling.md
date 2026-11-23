@@ -269,5 +269,9 @@ Applies while `AI_PROVIDER=claude_cli` (or `TELEGRAM_IMPORT_AI_PROVIDER=claude_c
 - **No answer-length or temperature control.** The CLI ignores `max_completion_tokens`, `temperature` and
   `reasoning_effort`. The assistant's reply is cut to `AI_ASSISTANT_MAX_OUTPUT_TOKENS` after it arrives; every JSON
   feature bounds its fields while validating.
-- **Cache without Redis.** Production without `REDIS_URL` uses a file cache shared by the workers of the one machine
-  (not per-process memory); a second instance still needs Redis.
+- **Redis is required for correct limits.** Without `REDIS_URL` every gunicorn worker keeps its own counters (daily AI
+  budgets, stream limits, throttles), so each limit is multiplied by the worker count; `check --deploy` warns
+  (`naseeb.W001`). Set `REDIS_URL`.
+- **Subscription only.** The CLI child does not get `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` (they would make the
+  CLI bill per API call, and CLI failures are refunded as unbilled). It logs in with the subscription login under
+  `AI_CLI_HOME` (or `CLAUDE_CODE_OAUTH_TOKEN`).

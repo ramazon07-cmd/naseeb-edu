@@ -333,13 +333,13 @@ class AssistantCliTests(SimpleTestCase):
 class EducationAiCliTests(SimpleTestCase):
     def test_major_explanations_run_through_the_cli_without_a_gateway_key(self):
         from . import education_ai
-        payload = ai_providers._cli_payload(cli_output('{"summary": "ok"}'), {'model': 'claude-cli/sonnet'})
+        payload = ai_providers._cli_payload(cli_output('{"summary": "ok", "major_guidance": []}'), {'model': 'claude-cli/sonnet'})
         with override_settings(AI_PROVIDER='claude_cli', AI_GATEWAY_API_KEY='', OUTBOUND_AI_ENABLED=True), \
                 mock.patch(WHICH, return_value='/bin/claude'), \
                 mock.patch.object(ai_providers, 'chat', return_value=payload) as chat:
             self.assertTrue(education_ai.recommendation_ai_available())
             raw, body = education_ai._call_gateway({'majors': []})
-        self.assertEqual(education_ai._parse_gateway(raw, body), {'summary': 'ok'})
+        self.assertEqual(education_ai._parse_gateway(raw, body), {'summary': 'ok', 'major_guidance': []})
         self.assertTrue(chat.call_args.args[0]['model'].startswith('claude-cli/'))
 
     def test_a_cli_failure_is_an_unbilled_gateway_failure(self):

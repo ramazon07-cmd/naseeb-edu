@@ -37,13 +37,24 @@ LANGUAGES = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}
 MAX_LINE_CHARS = 240
 MAX_TOKENS = 1400
 NUMBER = re.compile(r'\d[\d,.]*')
-# A personal admission prediction (English, Russian, Uzbek): the model may quote the university's admit rate
-# but never say what the student's own chance is.
-CHANCE = re.compile(
-    r'chances?|probabilit|likelihood|\bodds\b|likely to (?:be )?(?:admit|accept|get in)|'
-    r'шанс|вероятн|ehtimol|imkoniyat',
+# A personal admission prediction (English, Russian, Uzbek): a chance/odds/probability word together with an
+# admission word, or a flat "you will be admitted". The model may quote the university's admit rate, and words such
+# as "opportunities" (imkoniyatlar) or a probability-and-statistics program are fine on their own.
+CHANCE_WORD = re.compile(
+    r'chances?\b|odds\b|probabilit|likelihood|\bshans\w*|шанс|вероятн|ehtimol|imkoniyat(?!lar)',
     re.IGNORECASE,
 )
+ADMISSION_WORD = re.compile(
+    r'admi(?:t|ssion|tted)|accept|get(?:ting)? in\b|enrol|поступ|принят|зачисл|qabul|kirish|o.qishga',
+    re.IGNORECASE,
+)
+PREDICTION = re.compile(r'\byou (?:will|would|should) (?:likely |easily |surely )?(?:be )?(?:admitted|accepted|get in)', re.IGNORECASE)
+
+
+def predicts_admission(line):
+    """Whether a line predicts the student's own admission."""
+    return bool((CHANCE_WORD.search(line) and ADMISSION_WORD.search(line)) or PREDICTION.search(line))
+
 
 SYSTEM = """You write short "why this fits you" lines for a student's list of universities.
 For each university card write exactly one plain sentence of at most 25 words, using only the facts given for
@@ -143,7 +154,7 @@ def validate(raw, items, student):
         line = line.strip()[:MAX_LINE_CHARS]
         facts = {key: value for key, value in item.items() if key != 'id'}  # an id is a label, not a fact
         allowed = known | numbers(json.dumps(facts, ensure_ascii=False))
-        lines[str(item['id'])] = line if numbers(line) <= allowed and not CHANCE.search(line) else ''
+        lines[str(item['id'])] = line if numbers(line) <= allowed and not predicts_admission(line) else ''
     return lines
 
 
@@ -153,7 +164,7 @@ def request_lines(student, items, language):
         {'role': 'user', 'content': json.dumps({'student': student, 'cards': items}, ensure_ascii=False)},
     ]
     deadline = time.monotonic() + settings.ESSAY_COACH_TOTAL_SECONDS
-    return coach._request_gateway(messages, MAX_TOKENS, deadline)
+    return coach._request_gateway(messages, MAX_TOKENS, deadline, ('reasons',))
 
 
 def generate(profile, user, data, version_key, rubric, language='en'):

@@ -9,7 +9,7 @@ from django.core.cache import cache
 from django.test import override_settings
 from rest_framework.test import APITestCase
 
-from . import ai_budget, letter_coach, letter_sensitive
+from . import ai_budget, ai_providers, letter_coach, letter_sensitive
 from .essay_lab import coach
 from .models import AiUsageLog, Honor, RecommendationLetter, RecommendationLetterCheck
 from .test_essay_coach import SCORED
@@ -363,7 +363,8 @@ class LetterCheckGuardTests(LetterCheckCase):
                 return reply
 
             left = self.left()
-            with mock.patch.object(coach, 'time', SimpleNamespace(monotonic=lambda: clock['now'])):
+            with mock.patch.object(coach, 'time', SimpleNamespace(monotonic=lambda: clock['now'])), \
+                    mock.patch.object(ai_providers, 'time', SimpleNamespace(monotonic=lambda: clock['now'])):
                 response, _ = self.check(urlopen)
             if expect:
                 self.assertEqual((response.status_code, timeouts), (200, [40, expect]))

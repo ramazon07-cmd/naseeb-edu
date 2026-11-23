@@ -362,10 +362,14 @@ def run_channel(run, name):
     def save_backlog():
         """Keep what has been read so far, so the next run does not read the same pages again."""
         keep = backlog.dump() if backlog.before else []
+        before = backlog.before
         if len(keep) > MAX_SAVED_BACKLOG:
+            # Keep the newest posts and move the cursor down to the oldest one kept: the posts dropped from
+            # the saved list lie below it, so the next run reads those pages again and none is skipped.
             logger.warning('telegram_import_backlog_truncated channel=%s kept=%s', name, MAX_SAVED_BACKLOG)
             keep = keep[-MAX_SAVED_BACKLOG:]
-        state.backlog_before, state.backlog_posts = (backlog.before if keep else None), keep
+            before = keep[0]['id']
+        state.backlog_before, state.backlog_posts = (before if keep else None), keep
         state.save(update_fields=['backlog_before', 'backlog_posts', 'last_run_at', 'updated_at'])
 
     try:
