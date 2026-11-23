@@ -285,7 +285,7 @@ class LetterRecheckTests(LetterCheckCase):
         for reply in (SCORE_REPLY, {**SCORE_REPLY, 'scores': {key: 1 for key in SCORE_REPLY['scores']}}):
             RecommendationLetterCheck.objects.all().delete()
             with override_settings(**cli), mock.patch.object(ai_providers, 'cli_available', return_value=True), \
-                    mock.patch.object(ai_providers, '_claude_cli', side_effect=ai_providers._gateway):
+                    mock.patch.object(ai_providers, '_claude_cli', side_effect=lambda body, timeout, **kw: ai_providers._gateway(body, timeout)):
                 response, _ = self.check(FakeGateway(score=reply))
             self.assertEqual(response.status_code, 200, response.data)
             self.assertEqual(RecommendationLetterCheck.objects.get().model, 'claude-cli/sonnet')

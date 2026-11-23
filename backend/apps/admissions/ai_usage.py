@@ -59,28 +59,49 @@ def _count(value):
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
-def capture(payload, body=None, sink=None):
-    """Remember the usage and model of a provider response (a whole reply or one stream event)."""
+def _merged(first, second):
+    """Two usage blocks added together, key by key (nested detail blocks too)."""
+    merged = dict(first)
+    for key, value in second.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merged(merged[key], value)
+        elif isinstance(value, int) and not isinstance(value, bool) and isinstance(merged.get(key), int):
+            merged[key] = merged[key] + value
+        else:
+            merged[key] = value
+    return merged
+
+
+def capture(payload, body=None, sink=None, *, accumulate=False):
+    """Remember the usage and model of a provider response (a whole reply or one stream event).
+
+    A feature that makes several provider calls under one sink (an import's repair call) passes
+    ``accumulate=True`` so the second reply's tokens are added to the first's instead of replacing them,
+    and the input/output sizes add up too.
+    """
     try:
         sink = sink if sink is not None else getattr(_local, 'sink', None)
         if sink is None or not isinstance(payload, dict):
             return
         if body is not None:
             sink['requested_model'] = body.get('model', '')
-            sink['input_chars'] = _chars(body.get('messages'))
+            chars = _chars(body.get('messages'))
+            sink['input_chars'] = sink.get('input_chars', 0) + chars if accumulate else chars
         if payload.get('model'):
             sink['model'] = str(payload['model'])
         usage = _usage_of(payload)
         if usage:
-            sink['usage'] = usage
+            sink['usage'] = _merged(sink['usage'], usage) if accumulate and isinstance(sink.get('usage'), dict) else usage
         choices = payload.get('choices')
         if usage or (isinstance(choices, list) and choices):
             sink['answered'] = True
+            if accumulate:
+                sink['answers'] = sink.get('answers', 0) + 1  # how many provider calls came back with an answer
         if isinstance(choices, list) and choices and isinstance(choices[0], dict):
             message = choices[0].get('message')
             content = message.get('content') if isinstance(message, dict) else None
             if isinstance(content, str):
-                sink['output_chars'] = len(content)
+                sink['output_chars'] = sink.get('output_chars', 0) + len(content) if accumulate else len(content)
     except Exception:
         logger.exception('Could not capture AI usage')
 
@@ -127,13 +148,14 @@ def _same_model(used, requested):
     return base(used) == base(requested)
 
 
-def record(feature, user, *, provider, status, sink=None, output_chars=0, refunded=False):
+def record(feature, user, *, provider, status, sink=None, output_chars=0, refunded=False, extra_attempt=False):
     """Store one call. ``status`` may be ``FAILED`` to derive provider_error / invalid_output.
 
     Refusals and local answers carry no tokens. ``fallback_used`` is true when the
     provider reports a different model than the one requested (the gateway's own fallback).
     ``refunded`` marks a call the provider did not charge and whose budget was given back:
-    it is kept as an attempt but is not counted as a paid call.
+    it is kept as an attempt but is not counted as a paid call. ``extra_attempt`` marks a further provider call
+    inside one budget unit (a check's second step): its tokens count, but it is not another use of the allowance.
     """
     try:
         sink = sink if sink is not None else getattr(_local, 'sink', None)
@@ -160,6 +182,7 @@ def record(feature, user, *, provider, status, sink=None, output_chars=0, refund
             language=(translation.get_language() or '')[:10],
             fallback_used=bool(paid and model and requested and not _same_model(model, requested)),
             refunded=bool(refunded and paid),
+            extra_attempt=bool(extra_attempt),
             **fields,
         )
     except Exception:

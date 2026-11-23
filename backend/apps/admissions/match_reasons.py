@@ -6,8 +6,10 @@ subject rank, SAT range and score, admit rate, cost against budget, aid) and the
 academics score and budget only: never essay or letter text, activities, or the student's name (free-text
 fields still go through the same redaction as the letter coach).
 
-Number check: a line may only use numbers that appear in its own card or in the student facts. A line with
-any other number (a made-up admit rate, a wrong rank) is replaced by an empty line, which the page does not show.
+Number check: a line may only use numbers that appear in its own card (never the card's internal id) or in the
+student facts. A line with any other number (a made-up admit rate, a wrong rank) is replaced by an empty line,
+which the page does not show. So is a line that talks about the student's chance or probability of admission:
+only the university's own admit rate may be quoted, never a personal prediction.
 
 The answer is cached by an input hash of the card list and the profile version, so asking again for the
 same list costs nothing. A failed call gives its unit back and answers 503.
@@ -24,16 +26,24 @@ from apps.users.cache_safety import cache_get, cache_set
 
 from . import ai_budget, ai_providers, ai_usage
 from .assistant import redact_pii
+from .streaming import release_db_connection
 from .essay_lab import coach
 from .letter_coach import anonymize
 
 FEATURE = 'college_match_reasons'
-VERSION = 'reasons-v2'
+VERSION = 'reasons-v3'
 CACHE_SECONDS = 7 * 24 * 60 * 60
 LANGUAGES = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}
 MAX_LINE_CHARS = 240
 MAX_TOKENS = 1400
 NUMBER = re.compile(r'\d[\d,.]*')
+# A personal admission prediction (English, Russian, Uzbek): the model may quote the university's admit rate
+# but never say what the student's own chance is.
+CHANCE = re.compile(
+    r'chances?|probabilit|likelihood|\bodds\b|likely to (?:be )?(?:admit|accept|get in)|'
+    r'шанс|вероятн|ehtimol|imkoniyat',
+    re.IGNORECASE,
+)
 
 SYSTEM = """You write short "why this fits you" lines for a student's list of universities.
 For each university card write exactly one plain sentence of at most 25 words, using only the facts given for
@@ -119,7 +129,8 @@ def numbers(text):
 
 def validate(raw, items, student):
     """``{card id: line}``. A missing or empty line raises; a line naming a number that is in neither its card
-    nor the student facts becomes an empty line (not shown)."""
+    (its id does not count) nor the student facts, or one that states an admission chance, becomes an empty
+    line (not shown)."""
     reasons = raw.get('reasons') if isinstance(raw, dict) else None
     if not isinstance(reasons, dict):
         raise ValueError('reasons must be an object')
@@ -130,8 +141,9 @@ def validate(raw, items, student):
         if not isinstance(line, str) or not line.strip():
             raise ValueError('a card has no line')
         line = line.strip()[:MAX_LINE_CHARS]
-        allowed = known | numbers(json.dumps(item, ensure_ascii=False))
-        lines[str(item['id'])] = line if numbers(line) <= allowed else ''
+        facts = {key: value for key, value in item.items() if key != 'id'}  # an id is a label, not a fact
+        allowed = known | numbers(json.dumps(facts, ensure_ascii=False))
+        lines[str(item['id'])] = line if numbers(line) <= allowed and not CHANCE.search(line) else ''
     return lines
 
 
@@ -160,12 +172,16 @@ def generate(profile, user, data, version_key, rubric, language='en'):
     if not reservation:
         ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
         raise ReasonsUnavailable('coach_resting')
-    ai_usage.begin()
+    sink = ai_usage.begin()
     try:
         student = profile_facts(profile, rubric)
+        release_db_connection()  # don't hold a pooled connection while the provider works
         lines = validate(request_lines(student, items, language), items, student)
     except (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError):
-        ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.FAILED)
+        ai_usage.record(
+            FEATURE, user, provider=ai_providers.provider(), status=ai_usage.FAILED,
+            sink=sink, refunded=not sink.get('answered'),
+        )
         coach.logger.warning('%s_provider_failure user_id=%s', FEATURE, getattr(user, 'pk', None))
         ai_budget.refund(reservation)  # a failed call is free
         raise ReasonsUnavailable('coach_unavailable')

@@ -50,6 +50,9 @@ class EducationMatchAITests(RoleIsolationBase):
         cache.clear()
         self.addCleanup(cache.clear)
         self.client.force_authenticate(self.student_a_user)
+        # The server derives the majors from the student's own profile; the request may only narrow them.
+        self.student_a.target_major = 'Computer Science, Economics'
+        self.student_a.save(update_fields=['target_major'])
 
     def post(self, payload=PAYLOAD):
         return self.client.post(URL, payload, format='json')
@@ -223,6 +226,8 @@ class EducationMatchAITests(RoleIsolationBase):
     def test_cache_is_per_student(self):
         with mock.patch('urllib.request.urlopen', return_value=gateway_reply()) as urlopen:
             self.post()
+            self.student_b.target_major = 'Computer Science, Economics'
+            self.student_b.save(update_fields=['target_major'])
             self.client.force_authenticate(self.student_b_user)
             self.post()
         self.assertEqual(urlopen.call_count, 2)

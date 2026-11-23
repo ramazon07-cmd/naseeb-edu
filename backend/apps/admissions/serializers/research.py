@@ -33,9 +33,11 @@ class CollegeResearchProfileSerializer(serializers.Serializer):
 
 
 class EducationMatchAIRequestSerializer(serializers.Serializer):
+    # Optional narrowing only: the server derives the candidates from the student's own profile, and anything
+    # here that is not one of them is ignored.
     major_candidates = serializers.ListField(
         child=serializers.CharField(max_length=160),
-        min_length=1,
+        required=False,
         max_length=8,
     )
     subject_strengths = serializers.ListField(
@@ -48,6 +50,4 @@ class EducationMatchAIRequestSerializer(serializers.Serializer):
         for field in ('major_candidates', 'subject_strengths'):
             values = attrs.get(field, [])
             attrs[field] = list(dict.fromkeys(value.strip() for value in values if value.strip()))
-        if not attrs['major_candidates']:
-            raise serializers.ValidationError({'major_candidates': 'Provide at least one major candidate.'})
         return attrs

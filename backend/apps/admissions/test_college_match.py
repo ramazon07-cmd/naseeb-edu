@@ -260,7 +260,7 @@ class ReasonsTests(MatchFixture, APITestCase):
         """A fake gateway answering one line per card id found in the request."""
         bodies = []
 
-        def post(body, timeout):
+        def post(body, timeout, **kwargs):
             bodies.append(body)
             cards = json.loads(body['messages'][1]['content'])['cards']
             reasons = lines if lines is not None else {str(card['id']): f'Reason for {card["name"]}.' for card in cards}

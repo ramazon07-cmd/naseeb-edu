@@ -4,8 +4,11 @@ No Telegram account, bot or API key is used: the preview is the same page anyone
 sees in a browser. Only the channel names in settings are fetched, redirects are
 refused, and pages are size-capped.
 """
+import contextlib
 import logging
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from urllib.request import HTTPSHandler, Request, build_opener
@@ -139,30 +142,87 @@ def parse_page(channel, html):
     return parser.page
 
 
-def fetch_html(channel, before=None):
-    """One preview page as text. Raises on network errors, redirects and oversized pages."""
+READ_CHUNK = 16384
+_scope = threading.local()
+
+
+@contextlib.contextmanager
+def deadline_scope(deadline):
+    """Every ``fetch_html`` call in this block stops at the absolute ``deadline`` (``time.monotonic()``)."""
+    previous = getattr(_scope, 'deadline', None)
+    _scope.deadline = deadline
+    try:
+        yield
+    finally:
+        _scope.deadline = previous
+
+
+def fetch_html(channel, before=None, deadline=None):
+    """One preview page as text. Raises on network errors, redirects and oversized pages.
+
+    The page is read in chunks and the clock is checked after each, so a response that trickles in cannot
+    outlast FETCH_TIMEOUT (or the run's absolute ``deadline``, ``time.monotonic()``): TimeoutError.
+    """
     if not valid_channel(channel):
         raise ValueError('Invalid channel name')
     url = f'https://t.me/s/{channel}' + (f'?before={int(before)}' if before else '')
     request = Request(url, headers={'User-Agent': 'Mozilla/5.0 NaseebEdu/1.0'})
     opener = build_opener(NoRedirects(), HTTPSHandler(context=telegram_ssl_context()))
-    with opener.open(request, timeout=FETCH_TIMEOUT) as response:
-        content = response.read(MAX_PAGE_BYTES + 1)
-    if len(content) > MAX_PAGE_BYTES:
+    stop_at = time.monotonic() + FETCH_TIMEOUT
+    deadline = deadline if deadline is not None else getattr(_scope, 'deadline', None)
+    if deadline is not None:
+        stop_at = min(stop_at, deadline)
+    if stop_at - time.monotonic() <= 0:
+        raise TimeoutError('No time left to read the Telegram page.')
+    body = bytearray()
+    with opener.open(request, timeout=min(FETCH_TIMEOUT, stop_at - time.monotonic())) as response:
+        while len(body) <= MAX_PAGE_BYTES:
+            if time.monotonic() >= stop_at:
+                raise TimeoutError('The Telegram page took too long to read.')
+            chunk = response.read(min(READ_CHUNK, MAX_PAGE_BYTES + 1 - len(body)))
+            if not chunk:
+                break
+            body += chunk
+    if len(body) > MAX_PAGE_BYTES:
         raise ValueError('Oversized Telegram response')
-    return content.decode('utf-8', 'replace')
+    return bytes(body).decode('utf-8', 'replace')
 
 
-def new_posts(channel, last_id, *, max_pages=MAX_BACKLOG_PAGES, fetch=None):
+@dataclass
+class Backlog:
+    """Where a backlog read stands. ``new_posts`` updates it after every page, so a read cut short (out of
+    time, a network error) can be saved and carried on later instead of started over."""
+
+    found: dict = field(default_factory=dict)
+    before: int | None = None
+
+    def dump(self):
+        return [
+            {'id': post.id, 'text': post.text, 'posted_at': post.posted_at}
+            for post in sorted(self.found.values(), key=lambda post: post.id)
+        ]
+
+    @classmethod
+    def load(cls, channel, before, saved):
+        found = {}
+        for item in saved or []:
+            if isinstance(item, dict) and isinstance(item.get('id'), int) and isinstance(item.get('text'), str):
+                found[item['id']] = Post(channel, item['id'], item['text'], str(item.get('posted_at') or ''))
+        return cls(found=found, before=before if found else None)
+
+
+def new_posts(channel, last_id, *, max_pages=MAX_BACKLOG_PAGES, fetch=None, backlog=None):
     """Posts newer than ``last_id``, oldest first.
 
     The first run (``last_id`` 0) reads the newest page only. Later runs page back
     until they reach ``last_id``, so no unseen post is skipped. Only a channel with more than
-    ``max_pages`` pages of unseen posts loses its oldest ones (logged).
+    ``max_pages`` pages of unseen posts loses its oldest ones (logged). With a ``backlog`` the read
+    resumes from where an earlier one stopped and keeps the backlog current page by page.
     """
     fetch = fetch or fetch_html
-    found = {}
-    before = None
+    backlog = backlog if backlog is not None else Backlog()
+    found = backlog.found
+    before = backlog.before
     for _ in range(max_pages):
         page = parse_page(channel, fetch(channel, before))
         for post in page.posts:
@@ -174,7 +234,7 @@ def new_posts(channel, last_id, *, max_pages=MAX_BACKLOG_PAGES, fetch=None):
         cursor = page.before if page.before and page.before <= oldest else oldest
         if oldest <= last_id + 1 or (before is not None and cursor >= before):
             break
-        before = cursor
+        before = backlog.before = cursor
     else:
         logger.warning('telegram_import_backlog_too_long channel=%s pages=%s last_id=%s', channel, max_pages, last_id)
     return [found[key] for key in sorted(found)]

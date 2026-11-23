@@ -1,6 +1,7 @@
 import os
 import secrets
 import sys
+import tempfile
 from datetime import timedelta
 from pathlib import Path
 from corsheaders.defaults import default_headers
@@ -67,15 +68,19 @@ AI_GATEWAY_URL = config(
 # Where a check's model call goes. `claude_cli` runs the local Claude CLI for testing without an API key and is
 # refused outside APP_ENV development/test (core/environment.py). See apps/admissions/ai_providers.py.
 AI_PROVIDER = config('AI_PROVIDER', default='gateway').strip().lower()
+# Pin an exact model id in production (a bare alias such as `sonnet` moves when the CLI is updated, and checks
+# and caches would keep their identity); core/checks.py warns about an alias.
 AI_TEST_CLI_MODEL = config('AI_TEST_CLI_MODEL', default='sonnet').strip() or 'sonnet'
 # Temporary bridge: lets production use the Claude CLI until the API key is set. Off by default.
 AI_CLI_ALLOW_PRODUCTION = config('AI_CLI_ALLOW_PRODUCTION', default=False, cast=bool)
 # The CLI installed on the Render disk (empty = `claude` on PATH) and the HOME holding its login.
 AI_CLI_PATH = config('AI_CLI_PATH', default='').strip()
 AI_CLI_HOME = config('AI_CLI_HOME', default='').strip()
-# Claude processes allowed at once on one machine (each needs ~250 MB), and how long a call waits for one.
+# Claude processes allowed at once on one machine (each needs ~250 MB), and how long an interactive call waits
+# for one (capped at 8 s in ai_providers: a waiting call holds a web thread, and the wait is part of the call's
+# own deadline).
 AI_CLI_MAX_CONCURRENT = config('AI_CLI_MAX_CONCURRENT', default=1, cast=int)
-AI_CLI_SLOT_WAIT_SECONDS = config('AI_CLI_SLOT_WAIT_SECONDS', default=45, cast=int)
+AI_CLI_SLOT_WAIT_SECONDS = config('AI_CLI_SLOT_WAIT_SECONDS', default=5, cast=int)
 AI_ASSISTANT_MODEL = config('AI_ASSISTANT_MODEL', default='openai/gpt-5.4-mini').strip()
 AI_ASSISTANT_FALLBACK_MODEL = config('AI_ASSISTANT_FALLBACK_MODEL', default='openai/gpt-5.4-nano').strip()
 AI_ASSISTANT_MAX_MESSAGES = config('AI_ASSISTANT_MAX_MESSAGES', default=12, cast=int)
@@ -382,6 +387,8 @@ CACHES = build_cache_settings(
     connect_timeout=config('REDIS_CONNECT_TIMEOUT', default=0.25, cast=float),
     socket_timeout=config('REDIS_SOCKET_TIMEOUT', default=0.25, cast=float),
     health_check_interval=config('REDIS_HEALTH_CHECK_INTERVAL', default=30, cast=int),
+    # Production without Redis: one file cache for all gunicorn workers on the machine (see build_cache_settings).
+    shared_file_dir=str(Path(tempfile.gettempdir()) / 'naseeb-shared-cache') if IS_PRODUCTION and not DEBUG else '',
 )
 
 AUTH_PASSWORD_VALIDATORS = [

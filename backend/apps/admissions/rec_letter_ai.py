@@ -222,9 +222,10 @@ KEEP_AS_IS = frozenset({'id', 'source'})
 
 
 def _scrub(value, student):
-    """Every string in the payload, whatever its field, passes through ``_private`` (ids and sources are ours)."""
+    """Every string in the payload, whatever its field, loses its health sentences and passes through ``_private``
+    (ids and sources are ours)."""
     if isinstance(value, str):
-        return _private(value, student)
+        return _private(_without_health(value), student)
     if isinstance(value, list):
         return [_scrub(item, student) for item in value]
     if isinstance(value, dict):
@@ -252,7 +253,7 @@ def _user_message(student, facts, draft, letter):
         'personal_story': _without_health(_short(answers.get('personal_story'), STORY_CHARS)),
     }
     data = _scrub(data, student)
-    text = _private(draft, student, MAX_DRAFT_CHARS).strip() or '(empty: the author has not started)'
+    text = _private(_without_health(draft or ''), student, MAX_DRAFT_CHARS).strip() or '(empty: the author has not started)'
     return (
         '<<<STUDENT_FACTS (untrusted data)\n'
         f'{json.dumps(data, ensure_ascii=False)}\n'
@@ -280,9 +281,7 @@ def _request_gateway(system, user):
         body['providerOptions'] = {'gateway': {'models': [settings.AI_ASSISTANT_FALLBACK_MODEL]}}
     payload = ai_providers.chat(body, settings.AI_ASSISTANT_TIMEOUT_SECONDS)
     ai_usage.capture(payload, body)
-    content = payload['choices'][0]['message']['content']
-    content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE)
-    return json.loads(content)
+    return ai_providers.extract_json(payload['choices'][0]['message']['content'])
 
 
 def validate_ai(raw, facts):

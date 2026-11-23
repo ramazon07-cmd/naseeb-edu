@@ -6,7 +6,15 @@ from django.core import checks
 def shared_cache_check(app_configs, **kwargs):
     """Rate limits, login lockouts and the AI budget need one cache shared by all processes."""
     backend = settings.CACHES.get('default', {}).get('BACKEND', '')
-    if settings.DEBUG or not backend.endswith('LocMemCache'):
+    if settings.DEBUG:
+        return []
+    if backend.endswith('FileBasedCache'):
+        return [checks.Warning(
+            'CACHES uses a file cache shared by the workers of this one machine (REDIS_URL is not set).',
+            hint='Set REDIS_URL so throttles, login lockouts and the AI budget are also shared across instances.',
+            id='naseeb.W001',
+        )]
+    if not backend.endswith('LocMemCache'):
         return []
     return [checks.Warning(
         'CACHES uses a per-process local-memory cache.',
@@ -61,6 +69,23 @@ def ai_provider_check(app_configs, **kwargs):
     if provider not in ('gateway', 'claude_cli'):
         return [checks.Error('AI_PROVIDER must be gateway or claude_cli.', id='naseeb.E002')]
     return []
+
+
+@checks.register()
+def ai_cli_model_check(app_configs, **kwargs):
+    """A bare model alias (`sonnet`) moves to a newer model when the CLI updates, while saved checks and caches
+    keep the old identity. Production on the CLI bridge should pin an exact model id."""
+    uses_cli = 'claude_cli' in (getattr(settings, 'AI_PROVIDER', ''), getattr(settings, 'TELEGRAM_IMPORT_AI_PROVIDER', ''))
+    if settings.APP_ENV != 'production' or not uses_cli:
+        return []
+    model = getattr(settings, 'AI_TEST_CLI_MODEL', '')
+    if model.lower().startswith('claude-') and any(char.isdigit() for char in model):
+        return []
+    return [checks.Warning(
+        f'AI_TEST_CLI_MODEL={model!r} is a moving alias, not an exact model id.',
+        hint='Set AI_TEST_CLI_MODEL to the exact model id (for example claude-sonnet-4-5) so results and caches stay tied to one model.',
+        id='naseeb.W011',
+    )]
 
 
 @checks.register()

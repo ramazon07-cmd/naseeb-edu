@@ -34,6 +34,7 @@ MAX_AI_ATTEMPTS = 2
 MIN_TEXT_CHARS = 40
 MAX_CANDIDATES = 8
 MAX_PAGES_PER_RUN = 60
+MAX_SAVED_BACKLOG = 1000  # posts kept between runs while a long backlog is being read
 # New posts are started until TELEGRAM_IMPORT_TIME_BUDGET_SECONDS; a step that could
 # then still be running HARD_EXTRA seconds later is not started (the bot's call must
 # end well before gunicorn's 120 s timeout).
@@ -240,26 +241,51 @@ def official_page(run, candidates):
 
 
 def _format(run, post, text, candidates, page):
-    """Call the gateway once for ``post``.
+    """Call the gateway for ``post`` (once, plus one repair call when the Claude CLI's reply is unusable).
 
-    The budget unit is given back only when no answer came back (nothing was billed);
-    an unusable answer was paid for and keeps its unit. A gateway that is down or
-    refuses the call stops the run: the post is fine and waits for the next run.
+    Every provider call takes one budget unit, each handed back (through its own reservation) only when no
+    answer came back (nothing was billed); an unusable answer was paid for and keeps its unit. Both calls
+    share one deadline, the run's hard deadline, and both calls' tokens go into one usage row. A gateway that
+    is down or refuses the call stops the run, and so does running out of time: the post is fine and waits for
+    the next run.
     """
-    if not ai_budget.consume_job(FEATURE):
+    first = ai_budget.consume_job(FEATURE)
+    if not first:
         ai_usage.record(FEATURE, None, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
         raise StopRun('budget_exhausted')
+    reservations = [first]
     run.stats.ai_calls += 1
     sink = ai_usage.begin()
+
+    def retry_gate():
+        extra = ai_budget.consume_job(FEATURE)
+        if extra:
+            reservations.append(extra)
+            run.stats.ai_calls += 1
+        return bool(extra)
+
+    def settle_budget():
+        """Give back the units whose call never came back with an answer."""
+        unanswered = len(reservations) - int((sink or {}).get('answers') or (1 if (sink or {}).get('answered') else 0))
+        for reservation in reservations[len(reservations) - max(0, unanswered):]:
+            ai_budget.refund_job(FEATURE, reservation)
+
     try:
-        result = formatter.format_post(post, text, candidates, run.today, page=page)
-    except (formatter.FormatterUnavailable, formatter.GatewayDown) as exc:
-        if not (sink or {}).get('answered'):
-            ai_budget.refund_job(FEATURE)
-        ai_usage.record(FEATURE, None, provider=ai_providers.provider(), status=ai_usage.FAILED, sink=sink)
+        result = formatter.format_post(
+            post, text, candidates, run.today, page=page, deadline=run.hard_deadline, retry_gate=retry_gate,
+        )
+    except (formatter.FormatterUnavailable, formatter.GatewayDown, formatter.OutOfTime) as exc:
+        settle_budget()
+        ai_usage.record(
+            FEATURE, None, provider=ai_providers.provider(), status=ai_usage.FAILED, sink=sink,
+            refunded=not (sink or {}).get('answered'),
+        )
         if isinstance(exc, formatter.GatewayDown):
             logger.warning('telegram_import_gateway_down channel=%s post=%s error=%s', post.channel, post.id, exc)
             raise StopRun('gateway_unavailable') from None
+        if isinstance(exc, formatter.OutOfTime):
+            logger.warning('telegram_import_repair_skipped channel=%s post=%s reason=%s', post.channel, post.id, exc.reason)
+            raise StopRun(exc.reason) from None
         raise
     ai_usage.record(FEATURE, None, provider=ai_providers.provider(), status=ai_usage.OK, sink=sink)
     return result
@@ -326,17 +352,37 @@ def run_channel(run, name):
 
     def timed_fetch(channel, before=None):
         run.need(fetch_module.FETCH_TIMEOUT)
-        return fetch_page(channel, before)
+        with fetch_module.deadline_scope(run.hard_deadline):
+            return fetch_page(channel, before)
+
+    # A backlog read cut short last time carries on from its saved cursor.
+    backlog = fetch_module.Backlog.load(name, state.backlog_before, state.backlog_posts) if state.last_message_id else None
+    backlog = backlog or fetch_module.Backlog()
+
+    def save_backlog():
+        """Keep what has been read so far, so the next run does not read the same pages again."""
+        keep = backlog.dump() if backlog.before else []
+        if len(keep) > MAX_SAVED_BACKLOG:
+            logger.warning('telegram_import_backlog_truncated channel=%s kept=%s', name, MAX_SAVED_BACKLOG)
+            keep = keep[-MAX_SAVED_BACKLOG:]
+        state.backlog_before, state.backlog_posts = (backlog.before if keep else None), keep
+        state.save(update_fields=['backlog_before', 'backlog_posts', 'last_run_at', 'updated_at'])
 
     try:
-        posts = fetch_module.new_posts(name, state.last_message_id, fetch=timed_fetch)
+        posts = fetch_module.new_posts(name, state.last_message_id, fetch=timed_fetch, backlog=backlog)
     except FETCH_ERRORS as exc:
         logger.warning('telegram_import_fetch_failed channel=%s error=%s', name, exc.__class__.__name__)
         stats.failed_channels.append(name)
         # Tried: a channel that keeps failing does not keep the first place in the next run.
         state.last_run_at = timezone.now()
-        state.save(update_fields=['last_run_at', 'updated_at'])
+        save_backlog()
         return
+    except StopRun:
+        save_backlog()  # out of time while reading the backlog: no post is handled, none is lost
+        raise
+    if state.backlog_before or state.backlog_posts:
+        state.backlog_before, state.backlog_posts = None, []
+        state.save(update_fields=['backlog_before', 'backlog_posts', 'updated_at'])
     posts = posts[:max(1, settings.TELEGRAM_IMPORT_MAX_POSTS_PER_CHANNEL)]
     stats.fetched += len(posts)
     added_before, rejected_before = stats.added, sum(stats.rejected.values())

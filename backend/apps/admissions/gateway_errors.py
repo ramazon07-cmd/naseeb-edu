@@ -7,13 +7,21 @@ unreachable network, TLS handshake) or an HTTP status the gateway returns
 without running the model (4xx including 429, and the gateway's own
 500/502/503). Keep the charge for anything after dispatch: a read timeout or
 reset, 408/504, and every failure after the first streamed chunk.
+
+The Claude CLI bridge has no per-call bill: any CLI failure (no free slot, timeout, non-zero exit, an
+error result, unreadable output) gives the unit back.
 """
 import socket
 import urllib.error
 
+from . import ai_providers
+
 # HTTP statuses where the gateway rejected the request without running the model.
 # 504 and 408 can arrive after the provider started work, so they keep the charge.
 UNBILLED_HTTP = frozenset({400, 401, 402, 403, 404, 405, 409, 413, 415, 422, 429, 500, 502, 503})
+
+
+CLI_FAILURES = (ai_providers.CliBusy, ai_providers.CliTimeout, ai_providers.CliError, ai_providers.CliOutputError)
 
 
 def in_connect_phase(exc):
@@ -36,6 +44,8 @@ def in_connect_phase(exc):
 
 def is_unbilled(exc):
     """Failures known to happen before the request was dispatched or the model ran."""
+    if isinstance(exc, CLI_FAILURES):
+        return True
     if isinstance(exc, urllib.error.HTTPError):
         return exc.code in UNBILLED_HTTP
     reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc

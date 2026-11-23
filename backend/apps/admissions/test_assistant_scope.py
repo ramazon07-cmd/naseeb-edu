@@ -65,13 +65,13 @@ class RulesReachTheModelTests(SimpleTestCase):
     @override_settings(AI_PROVIDER='claude_cli', APP_ENV='test')
     def test_cli_path_passes_the_system_prompt_as_system_prompt_flag(self):
         prompt = assistant._system_prompt('en', '')
-        done = mock.Mock(returncode=0, stderr='', stdout=json.dumps({'result': 'Sorry, I only help with admissions.', 'usage': {}}))
+        done = (0, json.dumps({'result': 'Sorry, I only help with admissions.', 'usage': {}}), '')
         with mock.patch.object(ai_providers, '_cli_binary', return_value='/bin/claude'), \
-                mock.patch.object(ai_providers.subprocess, 'run', return_value=done) as run:
+                mock.patch.object(ai_providers, '_run_process', return_value=done) as run:
             chunks = list(assistant._gateway_stream(self.MESSAGES, prompt))
         self.assertEqual(chunks, ['Sorry, I only help with admissions.'])
         command = run.call_args.args[0]
         self.assertEqual(command[command.index('--system-prompt') + 1], prompt)
-        stdin = run.call_args.kwargs['input']
+        stdin = run.call_args.args[1]
         self.assertEqual(stdin, self.MESSAGES[0]['content'])
         self.assertNotIn('Scope:', stdin)

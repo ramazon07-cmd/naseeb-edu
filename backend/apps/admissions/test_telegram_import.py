@@ -72,7 +72,7 @@ class FakeGateway:
         self.fail_with = fail_with
         self.bad_on = bad_on
 
-    def __call__(self, body):
+    def __call__(self, body, deadline=None):
         self.bodies.append(json.loads(json.dumps(body)))
         post = body['messages'][1]['content']
         if any(phrase in post for phrase in self.fail_on):
@@ -337,7 +337,7 @@ class TelegramImportTests(TestCase):
     def test_reasoning_effort_is_dropped_once_when_the_gateway_rejects_it(self):
         calls = []
 
-        def gateway(body):
+        def gateway(body, deadline=None):
             calls.append(dict(body))
             if 'reasoning_effort' in body:
                 raise urllib.error.HTTPError(
@@ -540,7 +540,7 @@ class SinglePostTests(TestCase):
     def handle(self, text, answer=None, pages=None):
         run = self.make_run(pages)
 
-        def gateway(body):
+        def gateway(body, deadline=None):
             self.bodies.append(body)
             return {'model': body['model'], 'choices': [{'message': {'content': json.dumps({**ANSWER, **(answer or {})})}}]}
 
@@ -1037,7 +1037,7 @@ class CliAnswerTests(TestCase):
     def ask(self, *answers):
         calls = []
 
-        def post(body):
+        def post(body, deadline=None):
             calls.append(body)
             reply = answers[len(calls) - 1]
             if isinstance(reply, Exception):
@@ -1095,4 +1095,4 @@ class CliAnswerTests(TestCase):
         with override_settings(**{**AI_ON, **CLI_IMPORT, 'TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS': 2}), \
                 mock.patch('apps.admissions.ai_providers.chat', chat):
             formatter._post({'messages': []})
-        self.assertEqual(seen, {'override': 'claude_cli', 'slot_wait': 2, 'reserve': 1})
+        self.assertEqual(seen, {'override': 'claude_cli', 'slot_wait': 2, 'reserve': 1, 'deadline': None})

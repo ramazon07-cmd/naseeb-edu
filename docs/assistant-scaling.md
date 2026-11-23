@@ -243,3 +243,31 @@ counts of `assistant_request mode=*`, `assistant_busy_fallback`,
 
 Watch for 30 minutes after every step: 5xx rate, chat 503/429 counts, RAM,
 `PoolTimeout`, and a manual sign-in plus one chat in the browser.
+
+---
+
+## Claude CLI bridge: production contract
+
+Applies while `AI_PROVIDER=claude_cli` (or `TELEGRAM_IMPORT_AI_PROVIDER=claude_cli`) runs in production. Tests in
+`backend/apps/admissions/test_ai_audit_hardening.py` lock these in.
+
+- **One deadline per call.** `ai_providers.chat(body, timeout, deadline=...)`: `timeout` is the total from the call
+  (slot wait included), and an earlier absolute `deadline` wins. The process gets only what is left after the wait.
+  Interactive calls wait for a slot at most `min(AI_CLI_SLOT_WAIT_SECONDS, 8)` seconds (default 5), then fail with the
+  usual "try again" answer and give the budget unit back, so web threads are not parked behind the queue.
+  Per-feature totals stay under the browser timeouts: assistant and letter ideas 35 s (browser 45 s), education 30 s
+  (45 s), college-match lines and both coaches 90 s (100 s), Telegram import one hard deadline per run (95 s; the bot
+  gives up at 110 s).
+- **No tools, no MCP, no secrets.** The command carries `--tools ""`, `--strict-mcp-config --mcp-config
+  '{"mcpServers":{}}'`, `--no-session-persistence`, `--setting-sources ""`. The child sees only an allowlist of
+  environment variables (`PATH`, `HOME`/`AI_CLI_HOME`, locale, proxy and CA variables, the CLI login variables), never
+  the backend's database, Django, gateway or bot secrets.
+- **Own process group.** The CLI starts in its own session; a timeout or error kills the whole group, so no Claude
+  child outlives its request. A hard-killed gunicorn worker (SIGKILL) cannot clean up; its slot lock is released by the
+  operating system, so check `ps` after forced restarts.
+- **Pin the model.** Set `AI_TEST_CLI_MODEL` to an exact id; `check --deploy` warns (`naseeb.W011`) about a bare alias.
+- **No answer-length or temperature control.** The CLI ignores `max_completion_tokens`, `temperature` and
+  `reasoning_effort`. The assistant's reply is cut to `AI_ASSISTANT_MAX_OUTPUT_TOKENS` after it arrives; every JSON
+  feature bounds its fields while validating.
+- **Cache without Redis.** Production without `REDIS_URL` uses a file cache shared by the workers of the one machine
+  (not per-process memory); a second instance still needs Redis.

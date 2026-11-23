@@ -574,14 +574,18 @@ class RecommendationLetterViewSet(StudentRecordListMixin, ScopedQuerysetMixin, v
         if reservation:
             release_db_connection()  # don't hold a pooled connection during the AI call
             language = getattr(request, 'LANGUAGE_CODE', None) or get_language()
-            ai_usage.begin()
+            sink = ai_usage.begin()
             succeeded = False
             try:
                 suggestions = rec_letter_ai.ai_suggestions(student, facts, data['draft'], letter=data, language=language)
                 ai_usage.record('recommendation_letter', request.user, provider=ai_providers.provider(), status=ai_usage.OK)
                 succeeded = True
             except rec_letter_ai.SuggestionsUnavailable:
-                ai_usage.record('recommendation_letter', request.user, provider=ai_providers.provider(), status=ai_usage.FAILED)
+                # The unit goes back below; a call that never got an answer was not billed either.
+                ai_usage.record(
+                    'recommendation_letter', request.user, provider=ai_providers.provider(), status=ai_usage.FAILED,
+                    sink=sink, refunded=not sink.get('answered'),
+                )
             finally:
                 if not succeeded:
                     ai_budget.refund(reservation)  # a failed call is free

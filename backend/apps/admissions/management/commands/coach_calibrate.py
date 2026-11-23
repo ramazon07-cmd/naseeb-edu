@@ -70,8 +70,12 @@ class Command(BaseCommand):
             return
         if options['provider']:
             settings.AI_PROVIDER = options['provider']
-        if ai_providers.uses_cli() and settings.APP_ENV not in ai_providers.CLI_ENVIRONMENTS:
-            raise CommandError('--provider claude_cli is only allowed when APP_ENV is development or test.')
+        if ai_providers.uses_cli() and not ai_providers.cli_allowed():
+            # The same rule the runtime uses: development/test, or production while the bridge is switched on.
+            raise CommandError(
+                '--provider claude_cli is only allowed when APP_ENV is development or test, '
+                'or while AI_CLI_ALLOW_PRODUCTION is on.'
+            )
         if not coach.gateway_configured():
             raise CommandError(
                 'No real gateway configured (OUTBOUND_AI_ENABLED and AI_GATEWAY_API_KEY, or '
