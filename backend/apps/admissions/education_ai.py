@@ -18,7 +18,7 @@ from django.conf import settings
 from core.ai_policy import outbound_ai_allowed
 from apps.users.cache_safety import cache_get, cache_set
 
-from . import ai_budget, ai_usage
+from . import ai_budget, ai_providers, ai_usage
 
 
 logger = logging.getLogger('naseeb.education_ai')
@@ -39,7 +39,7 @@ class EducationAIBudgetExhausted(Exception):
 
 
 def recommendation_ai_available():
-    return outbound_ai_allowed() and bool(settings.AI_GATEWAY_API_KEY)
+    return outbound_ai_allowed() and ai_providers.configured()
 
 
 def latest_assessment_scores(profile):
@@ -183,6 +183,16 @@ def _call_gateway(context):
         'stream': False,
         'max_completion_tokens': MAX_OUTPUT_TOKENS,
     }
+    if ai_providers.uses_cli():
+        body['model'] = ai_providers.active_model(settings.EDUCATION_MATCH_MODEL)
+        try:
+            payload = ai_providers.chat(body, settings.AI_RECOMMENDATION_TIMEOUT_SECONDS)
+        except TimeoutError as exc:
+            # No free CLI slot, or the CLI ran out of time: nothing is billed per call.
+            raise GatewayFailure(True) from exc
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise GatewayFailure(True) from exc
+        return json.dumps(payload).encode('utf-8'), body
     request = urllib.request.Request(
         settings.AI_GATEWAY_URL,
         data=json.dumps(body).encode('utf-8'),
@@ -237,7 +247,7 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
     """
     user = profile.user
     if not recommendation_ai_available():
-        ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.LOCAL_FALLBACK)
+        ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.LOCAL_FALLBACK)
         raise EducationAIUnavailable()
     context = build_context(profile, major_candidates, subject_strengths)
     cache_key = _cache_key(profile, context)
@@ -246,14 +256,14 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
         return cached
     reservation = ai_budget.consume(FEATURE, user)
     if not reservation:
-        ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
+        ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
         raise EducationAIBudgetExhausted()
     ai_usage.begin()
     try:
         raw, body = _call_gateway(context)
     except GatewayFailure as failure:
         logger.warning('education_ai_provider_failure student_id=%s', profile.pk)
-        ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED, refunded=bool(failure.unbilled))
+        ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.FAILED, refunded=bool(failure.unbilled))
         if failure.unbilled:
             ai_budget.refund(reservation)
         raise EducationAIUnavailable()
@@ -264,8 +274,8 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
     except (KeyError, IndexError, TypeError, ValueError):
         # The provider answered (and billed), so the call stays counted.
         logger.warning('education_ai_invalid_output student_id=%s', profile.pk)
-        ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED)
+        ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.FAILED)
         raise EducationAIUnavailable()
-    ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.OK)
+    ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.OK)
     cache_set(cache_key, result, timeout=CACHE_TTL_SECONDS)
     return result
