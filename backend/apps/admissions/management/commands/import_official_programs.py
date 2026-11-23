@@ -7,6 +7,7 @@ is null or empty in the file never overwrites what the database already has, and
 changes nothing. No participant or winner names are read: only the fields below.
 """
 import json
+import re
 from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
@@ -57,13 +58,47 @@ def whole(value):
     return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0 else None
 
 
+GAP_WORDS = re.compile(
+    r'(completed|graduated?|finished)(\s+from)?\s+(high|secondary)\s+school|(high|secondary)\s+school\s+graduates?|\bgraduates?\b|school[- ]leavers?|gap[- ]years?|not yet (entered|started|enrolled)|post[- ]secondary',
+)
+RANGE = re.compile(r'(\d{1,2})\s*(?:[-\u2010-\u2015]|to|through)\s*(\d{1,2})')
+FIRST_GRADE, LAST_GRADE = 5, 11
+
+
+def grade_codes(value):
+    """Turn the research row's prose ("Grades 9-12", "High school", "Completed high school") into the
+    comma-separated codes every reader expects (5..11 and "gap"). Empty string when nothing parses."""
+    if not isinstance(value, str):
+        return ''
+    low = value.lower()
+    picked = set()
+    low = re.sub(r'\bgraduates?\s+(are\s+)?(in)?eligible|not\s+(yet\s+|already\s+)?graduated', ' ', low)
+    if GAP_WORDS.search(low):
+        picked.add('gap')
+        low = GAP_WORDS.sub(' ', low)
+    if re.search(r'high\s*school|secondary', low):
+        picked.update(('9', '10', '11'))
+    low = re.sub(r'\b(19|20)\d{2}\b', ' ', low)
+    spans = [(int(a), int(b)) for a, b in RANGE.findall(low)]
+    low = RANGE.sub(' ', low)
+    spans += [(int(n), int(n)) for n in re.findall(r'\b(\d{1,2})\b', low)]
+    for first, last in spans:
+        first, last = min(first, last), max(first, last)
+        if first > 12 or last < FIRST_GRADE:
+            continue
+        first, last = min(max(first, FIRST_GRADE), LAST_GRADE), min(last, LAST_GRADE)
+        picked.update(str(n) for n in range(first, last + 1))
+    order = [str(n) for n in range(FIRST_GRADE, LAST_GRADE + 1)] + ['gap']
+    return ','.join(code for code in order if code in picked)
+
+
 def changes_for(row):
     """The OpportunityProgram field values this row states (only the ones it actually knows)."""
     values = {
         'description': text(row.get('description'), 5000),
         'category': text(row.get('category'), 100),
         'country': text(row.get('country'), 120), 'city': text(row.get('city'), 120),
-        'eligible_grades': text(row.get('eligible_grades'), 120), 'eligible_ages': text(row.get('eligible_ages'), 160),
+        'eligible_grades': grade_codes(row.get('eligible_grades')) or None, 'eligible_ages': text(row.get('eligible_ages'), 160),
         'deadline_text': text(row.get('deadline_text'), 2000),
         'fee_text': text(row.get('fee_text'), 300), 'aid_details': text(row.get('aid_details'), 300),
         'requirements': text(row.get('requirements'), 5000),
@@ -73,6 +108,9 @@ def changes_for(row):
         'program_type': row.get('program_type') if row.get('program_type') in PROGRAM_TYPES else None,
         'delivery_mode': row.get('delivery_mode') if row.get('delivery_mode') in DELIVERY else None,
     }
+    prose = text(row.get('eligible_grades'), 200)
+    if values['eligible_grades'] and values['requirements'] and prose != values['eligible_grades']:
+        values['requirements'] = text(f"Eligible grades: {prose}\n{values['requirements']}", 5000)
     for name in ('scholarship_available', 'open_to_international', 'open_to_uzbekistan'):
         values[name] = row[name] if isinstance(row.get(name), bool) else None
     sources = [item for item in (link(entry) for entry in row.get('sources') or [] if isinstance(entry, str)) if item and official(item)]

@@ -66,7 +66,7 @@ EVIDENCE = ('achievements', 'honors', 'researches', 'projects', 'internships', '
 SCORING_FIELDS = (
     'id', 'country', 'market', 'ranking', 'sat_min', 'sat_max', 'act_min', 'act_max', 'popular_majors',
     'net_price_usd', 'intl_cost_usd', 'acceptance_rate', 'test_optional', *OFFERED_AID, *AID_DETAILS,
-    'intl_acceptance_rate', 'intl_need_policy', 'credential_route', 'ielts_min', 'entrance_exam',
+    'intl_aid_availability', 'intl_acceptance_rate', 'intl_need_policy', 'credential_route', 'ielts_min', 'entrance_exam',
 )
 # Fit says whether a university suits the student: country and major (22) and aid (8).
 # Admission chances are the band (admission_chance.py), not part of this score.

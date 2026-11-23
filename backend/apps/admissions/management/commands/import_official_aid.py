@@ -79,6 +79,16 @@ def changes_for(row):
     ):
         if flag(row.get(source)) is not None:
             values[target] = row[source]
+    # College Search filters and facet counts read the general offers_* flags; never set them False from here.
+    if row.get('merit_for_intl') is True:
+        values['offers_merit_aid'] = True
+    if row.get('need_based_for_intl') is True:
+        values['offers_need_based_aid'] = True
+    # College Search filters and facet counts read the general offers_* flags; never set them False from here.
+    if row.get('merit_for_intl') is True:
+        values['offers_merit_aid'] = True
+    if row.get('need_based_for_intl') is True:
+        values['offers_need_based_aid'] = True
     if row.get('meets_full_need_intl') is True:
         values['meets_full_need'] = True
     currency = (row.get('currency') or '').strip().upper() if isinstance(row.get('currency'), str) else ''

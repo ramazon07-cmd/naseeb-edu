@@ -3,7 +3,7 @@ import ssl
 import time
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.error import URLError
 
 from django.conf import settings
@@ -96,6 +96,44 @@ class TelegramFeedTests(SimpleTestCase):
         page = fetch_posts()
         self.assertEqual(page['posts'], ['naseeb_edu/212'])
         self.assertEqual(page['before'], 210)
+
+    @patch('apps.admissions.telegram_feed.build_opener')
+    def test_a_page_of_only_hidden_posts_still_pages_older(self, opener):
+        # Latest page shows posts 150-160; the page before it (older than 150) is all hidden but has a real cursor.
+        hidden = lambda n: f'<div data-post="naseeb_edu/{n}"><div class="message_media_not_supported"></div></div>'
+        pages = {
+            None: '<a data-before="150"></a>' + ''.join(
+                f'<div data-post="naseeb_edu/{n}"><div class="tgme_widget_message_text">x</div></div>' for n in (150, 160)),
+            150: '<a data-before="120"></a>' + ''.join(hidden(n) for n in (120, 130, 140)),
+            120: '<div data-post="naseeb_edu/110"><div class="tgme_widget_message_text">old</div></div>',
+        }
+
+        def fetch(request, timeout):
+            query = request.full_url.partition('before=')[2]
+            body = pages[int(query) if query else None].encode()
+            return mock_response(body)
+
+        def mock_response(body):
+            handle = MagicMock()
+            handle.__enter__.return_value.read.return_value = body
+            return handle
+        opener.return_value.open.side_effect = fetch
+
+        first = self.get().data
+        self.assertEqual((first['posts'], first['before']), (['naseeb_edu/150', 'naseeb_edu/160'], 150))
+        hidden_page = self.get('?before=150').data
+        self.assertEqual((hidden_page['posts'], hidden_page['before'], hidden_page['newest']), ([], 120, 140))
+        # The client follows the cursor and gets the real older page, not the latest again.
+        older = self.get('?before=120').data
+        self.assertEqual((older['posts'], older['newest']), (['naseeb_edu/110'], 110))
+
+    @patch('apps.admissions.telegram_feed.fetch_posts')
+    def test_a_cursor_from_a_hidden_only_newest_page_is_not_taken_for_a_made_up_one(self, fetch):
+        # Every post on the newest page is hidden, so `posts` is empty; `newest` still says the cursor is real.
+        cache.set(page_key(None), {'page': {'channel': 'naseeb_edu', 'posts': [], 'before': 140, 'newest': 150}, 'at': time.time()}, 3600)
+        fetch.return_value = {'channel': 'naseeb_edu', 'posts': ['naseeb_edu/130'], 'before': None, 'newest': 139}
+        self.assertEqual(self.get('?before=140').data['posts'], ['naseeb_edu/130'])
+        fetch.assert_called_once_with(140)
 
     @patch('apps.admissions.telegram_feed.fetch_posts')
     def test_cached_latest_and_history_are_separate(self, fetch):

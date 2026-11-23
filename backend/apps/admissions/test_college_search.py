@@ -2,6 +2,8 @@
 from datetime import date
 from unittest import mock
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from apps.admissions import college_search
@@ -218,6 +220,25 @@ class FitTests(CollegeSearchFixture, APITestCase):
         # Every box unticked shows nothing; no bands parameter shows everything.
         self.assertEqual(self.search('bands=')['count'], 0)
         self.assertEqual(self.search()['count'], 5)
+
+    def test_scoring_never_queries_per_university(self):
+        # A field missing from SCORING_FIELDS is a deferred load: one extra query per university.
+        self.ready_profile()
+        self.tashkent.intl_aid_availability = 'limited'
+        self.tashkent.save()
+        ctx = college_search.fit_context(self.student)
+        real, extra = college_search.score_university, []
+
+        def counting(university, context):
+            before = len(connection.queries)
+            result = real(university, context)
+            extra.append(len(connection.queries) - before)
+            return result
+
+        with CaptureQueriesContext(connection), mock.patch.object(college_search, 'score_university', counting):
+            college_search.fit_scores(self.student, ctx)
+        self.assertEqual(extra, [0] * University.objects.count())
+        self.assertIn('intl_aid_availability', college_search.SCORING_FIELDS)
 
     def test_the_catalogue_is_scored_once_per_profile(self):
         self.ready_profile()

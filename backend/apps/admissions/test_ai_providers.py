@@ -350,3 +350,63 @@ class EducationAiCliTests(SimpleTestCase):
             with self.assertRaises(education_ai.GatewayFailure) as caught:
                 education_ai._call_gateway({'majors': []})
         self.assertTrue(caught.exception.unbilled)
+
+
+@override_settings(**CLI, AI_CLI_SLOT_WAIT_SECONDS=0, AI_CLI_MAX_CONCURRENT=3)
+class CliSlotReserveTests(SimpleTestCase):
+    """A caller with reserve=N only takes a slot while N others stay free, whichever slots the others hold."""
+
+    def setUp(self):
+        import tempfile
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        patcher = mock.patch('apps.admissions.ai_providers.tempfile.gettempdir', return_value=folder.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.folder = f'{folder.name}/naseeb-ai-cli-slots'
+
+    def hold(self, *indexes):
+        import fcntl
+        import os
+        os.makedirs(self.folder, exist_ok=True)
+        for index in indexes:
+            handle = open(f'{self.folder}/slot-{index}.lock', 'w')
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.addCleanup(handle.close)
+
+    def take(self, reserve):
+        with ai_providers._cli_slot(reserve=reserve):
+            return True
+
+    def test_no_reserve_takes_any_free_slot(self):
+        self.hold(0, 1)
+        self.assertTrue(self.take(0))
+
+    def test_reserve_refuses_when_students_hold_the_low_slots(self):
+        # Slots 0 and 1 are busy: slot 2 is the only free one, and it is the one reserved.
+        self.hold(0, 1)
+        with self.assertRaises(TimeoutError):
+            self.take(1)
+
+    def test_reserve_refuses_when_students_hold_the_high_slots(self):
+        self.hold(1, 2)
+        with self.assertRaises(TimeoutError):
+            self.take(1)
+
+    def test_reserve_takes_a_slot_when_another_stays_free(self):
+        self.hold(2)
+        self.assertTrue(self.take(1))
+
+    def test_a_reserving_call_releases_its_slot_and_probes(self):
+        self.hold(2)
+        self.take(1)
+        self.hold(0)
+        # Slots 0 and 2 are held now; nothing from the earlier call is still locked, so slot 1 is free
+        # but it is the last one, which a reserve=1 caller must leave alone.
+        with self.assertRaises(TimeoutError):
+            self.take(1)
+        self.assertTrue(self.take(0))
+
+    @override_settings(AI_CLI_MAX_CONCURRENT=1)
+    def test_a_single_slot_ignores_the_reserve(self):
+        self.assertTrue(self.take(1))

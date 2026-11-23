@@ -109,14 +109,17 @@ def fetch_posts(before=None):
         cursor = None
     # The cursor is worked out from every post on the page; only viewable posts are shown.
     shown = [post_id for post_id in ids if post_id in parser.viewable]
-    return {'channel': CHANNEL, 'posts': [f'{CHANNEL}/{post_id}' for post_id in shown], 'before': cursor}
+    # `newest` counts hidden posts too: a page of only hidden posts still proves its cursor is real.
+    return {'channel': CHANNEL, 'posts': [f'{CHANNEL}/{post_id}' for post_id in shown], 'before': cursor, 'newest': max(ids)}
 
 
 def page_key(before):
-    return f'telegram-feed:v3:{CHANNEL}:{before or "latest"}'
+    return f'telegram-feed:v4:{CHANNEL}:{before or "latest"}'
 
 
 def newest_post(page):
+    if page.get('newest'):
+        return page['newest']
     return max((int(post.split('/')[1]) for post in page['posts']), default=0)
 
 

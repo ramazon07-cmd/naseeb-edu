@@ -15,7 +15,7 @@ import { withQuery } from '../lib/routes';
 import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
 import { PAGE_PATHS } from '../lib/routes';
 import { daysUntil, dueLabel, dueTone } from '../lib/college';
-import { PROGRAM_DELIVERY, PROGRAM_FILTER_DEFAULTS, PROGRAM_GRADES, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, isUnverifiedTelegramImport, groupProgramsByDeadline, hasProgramFilters, programFilterState, programFilterWrite, programGrades, selectedGrades, toggleGrade } from '../lib/programFilters';
+import { PROGRAM_DELIVERY, PROGRAM_FILTER_DEFAULTS, PROGRAM_GRADES, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, isUnverifiedTelegramImport, groupProgramsByDeadline, extraFeeText, hasProgramFilters, isFreeProgram, programFilterState, programFilterWrite, programGrades, selectedGrades, toggleGrade } from '../lib/programFilters';
 
 // The catalog is a yearly list: only a few rows carry a real date, the rest keep the
 // counselor sheet's own deadline text and have to be confirmed on the official page.
@@ -131,7 +131,7 @@ function ProgramRow({ item, closed, due, today, saved, busy, onToggle, onOpen, c
         {item.eligible_ages && <span><UsersRound size={15} aria-hidden="true" /> {t('Ages')} {item.eligible_ages}</span>}
         {place && <span><MapPin size={15} aria-hidden="true" /> {place}</span>}
         {item.delivery_mode !== 'unspecified' && <span><Monitor size={15} aria-hidden="true" /> {t(DELIVERY_LABELS[item.delivery_mode] || 'To verify')}</span>}
-        {item.fee_usd != null && <span><DollarSign size={15} aria-hidden="true" /> {Number(item.fee_usd) === 0 ? t('Free') : money(item.fee_usd)}</span>}
+        {item.fee_usd != null && item.fee_usd !== '' && <span><DollarSign size={15} aria-hidden="true" /> {isFreeProgram(item) ? t('Free') : money(item.fee_usd)}</span>}
         {item.scholarship_available && <span className="program-row-aid" title={t(item.aid_details)}><HandCoins size={15} aria-hidden="true" /> {t('Financial aid available')}</span>}
         {isUnverifiedTelegramImport(item) && <span className="program-row-unverified"><TriangleAlert size={15} aria-hidden="true" /> {t('From Telegram, not yet verified')}</span>}
       </div>
@@ -169,8 +169,8 @@ function ProgramDetail({ entry, similar, saved, saveBusy, today, onToggle, onBac
   const openTo = [item.open_to_international === true ? t('Open to international students') : item.open_to_international === false ? t('Not open to international students') : '',
     item.open_to_uzbekistan === true ? t('Open to students from Uzbekistan') : item.open_to_uzbekistan === false ? t('Not open to students from Uzbekistan') : ''];
   const who = [grades.length ? `${t('Grades')} ${grades.join(', ')}` : '', item.eligible_ages ? `${t('Ages')} ${item.eligible_ages}` : '', ...openTo].filter(Boolean).join(' · ');
-  const fee = item.fee_usd != null ? (Number(item.fee_usd) === 0 ? t('Free') : money(item.fee_usd)) : '';
-  const cost = [fee, item.fee_text && Number(item.fee_usd) !== 0 && item.fee_text !== fee ? item.fee_text : '', item.scholarship_available ? t('Financial aid available') : ''].filter(Boolean).join(' · ');
+  const fee = item.fee_usd != null && item.fee_usd !== '' ? (isFreeProgram(item) ? t('Free') : money(item.fee_usd)) : '';
+  const cost = [fee, extraFeeText(item, fee), item.scholarship_available ? t('Financial aid available') : ''].filter(Boolean).join(' · ');
   const dates = item.start_date ? [dateText(item.start_date), item.end_date && item.end_date !== item.start_date ? dateText(item.end_date) : ''].filter(Boolean).join(' – ') : '';
   const sources = [...new Set([item.source_url, ...(item.official_sources || [])].filter(Boolean))];
   const verified = !item.needs_verification && Boolean(item.official_verified_at);
@@ -343,7 +343,7 @@ export function ProgramsPage({ data, query, search, navigate, notify }) {
     finally { setSavingId(null); }
   }
 
-  const isFree = (item) => item.fee_usd != null && Number(item.fee_usd) === 0;
+  const isFree = isFreeProgram;
   const freeCount = programs.filter(({ item }) => isFree(item)).length;
   // Program deadlines for the radar, from what this page already holds: programs with a confirmed
   // date that are still open, plus saved programs that only have a usual (approximate) date.

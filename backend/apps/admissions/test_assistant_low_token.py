@@ -228,6 +228,13 @@ class EndpointTests(Fixture, APITestCase):
             response, text = self.chat('Which tasks are overdue?')
         self.assertEqual((response['X-Assistant-Source'], text), ('gateway', 'AI'))
 
+    @override_settings(AI_PROVIDER='claude_cli', APP_ENV='development')
+    def test_the_usage_row_names_the_provider_and_the_source_stays_gateway(self):
+        with mock.patch.object(assistant, '_gateway_stream', side_effect=lambda *a: iter(['AI'])):
+            response, text = self.chat('Which tasks are overdue?')
+        self.assertEqual((response['X-Assistant-Source'], text), ('gateway', 'AI'))
+        self.assertEqual(AiUsageLog.objects.get().provider, 'claude_cli')
+
     def test_a_replayed_local_turn_is_dropped_from_history(self):
         _, local = self.chat('Which tasks are overdue?', language='en')
         seen = []

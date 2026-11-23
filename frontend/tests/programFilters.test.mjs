@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PROGRAM_FILTER_DEFAULTS, activeProgramFilterCount, adoptProgramFilterUrl, compactGrades, countdownDay, filterPrograms, groupProgramsByDeadline,
-  hasProgramFilters, isUnverifiedTelegramImport, programFilterState, programFilterWrite, programFiltersQuery, readProgramFilters, selectedGrades, toggleGrade, usualDeadline,
+  extraFeeText, hasProgramFilters, isFreeProgram, isUnverifiedTelegramImport, programFilterState, programFilterWrite, programFiltersQuery, readProgramFilters, selectedGrades, toggleGrade, usualDeadline,
 } from '../src/lib/programFilters.js';
 
 const today = '2026-09-25';
@@ -203,4 +203,21 @@ test('only unverified rows from the Telegram import get the Telegram label', () 
   assert.equal(isUnverifiedTelegramImport(program(9, { needs_verification: true, source_metadata: { sheet: 'counselors' } })), false);
   assert.equal(isUnverifiedTelegramImport(program(9, { needs_verification: true })), false);
   assert.equal(isUnverifiedTelegramImport(null), false);
+});
+
+test('a missing fee is unknown, not free, and its fee text is still shown', () => {
+  const insead = { fee_usd: null, fee_text: '€5,975' };
+  assert.equal(isFreeProgram(insead), false);
+  assert.equal(isFreeProgram({ fee_text: 'x' }), false);
+  assert.equal(isFreeProgram({ fee_usd: '' }), false);
+  assert.equal(extraFeeText(insead, ''), '€5,975');
+  assert.equal(extraFeeText({ fee_usd: 450, fee_text: '€420' }, '$450'), '€420');
+  assert.equal(extraFeeText({ fee_usd: 450, fee_text: '$450' }, '$450'), '');
+});
+
+test('only a real 0 is free, and then the fee text is hidden', () => {
+  assert.equal(isFreeProgram({ fee_usd: 0 }), true);
+  assert.equal(isFreeProgram({ fee_usd: '0' }), true);
+  assert.equal(isFreeProgram({ fee_usd: 20 }), false);
+  assert.equal(extraFeeText({ fee_usd: 0, fee_text: 'No fee' }, 'Free'), '');
 });
