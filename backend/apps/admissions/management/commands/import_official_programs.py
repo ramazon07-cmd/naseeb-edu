@@ -143,6 +143,16 @@ def edition_changes_for(detail):
                           ('deadline', day), ('deadline_text', lambda v: text(v, 2000) or '')):
         if name in core:
             values[name] = convert(core[name])
+    # Price, delivery and apply page belong to the edition too (a winter online price is not the summer one).
+    if 'fee_usd' in core:
+        values['fee_usd'] = whole(core['fee_usd'])
+    if 'fee_text' in core:
+        values['fee_text'] = text(core['fee_text'], 300) or ''
+    if core.get('delivery_mode') in DELIVERY:
+        values['delivery_mode'] = core['delivery_mode']
+    if 'application_url' in core:
+        apply_url = link(core['application_url'])
+        values['application_url'] = apply_url if apply_url and official(apply_url) else ''
     if text(core.get('title'), 220):
         values['title'] = text(core.get('title'), 220)
     sources = [item for item in (link(entry) for entry in core.get('sources') or [] if isinstance(entry, str)) if item and official(item)]
@@ -199,6 +209,9 @@ class Command(BaseCommand):
             detail = details.get(row['id'], {})
             values.update(detail_changes_for(detail))
             values.update(edition_changes_for(detail))
+            # A deadline the details state is used when neither the catalog row nor the edition has one.
+            if 'deadline' not in values and not program.deadline and day(detail.get('deadline')):
+                values['deadline'] = day(detail['deadline'])
             # Facts the catalog row lacks are filled from the details; an existing value is never replaced.
             for name, found in (('country', text(detail.get('country'), 120)), ('eligible_ages', text(detail.get('age_range'), 160))):
                 if found and not values.get(name) and not getattr(program, name):

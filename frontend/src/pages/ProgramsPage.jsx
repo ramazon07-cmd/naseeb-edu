@@ -166,7 +166,9 @@ function DetailList({ title, items, icon: Icon }) {
 // Fixed team formats are translated; any other researched wording stays as written (English for now).
 const teamLabel = (value) => {
   const text = typeof value === 'string' ? value.trim() : '';
-  if (/^individual$/i.test(text)) return t('Individual');
+  if (/^individual( applicants?| applications?| attendees| delegates)?$/i.test(text)) return t('Individual');
+  const range = text.match(/^(individual or )?teams? of (\d+)\s*[–-]\s*(\d+)(?: students| members)?$/i);
+  if (range) return range[1] ? t('Individual or teams of {min}–{max}', { min: range[2], max: range[3] }) : t('Teams of {min}–{max}', { min: range[2], max: range[3] });
   if (/^individual or teams$/i.test(text)) return t('Individual or teams');
   const upTo = text.match(/^(individual or )?teams? of up to (\d+)$/i);
   if (upTo) return upTo[1] ? t('Individual or teams of up to {n}', { n: upTo[2] }) : t('Teams of up to {n}', { n: upTo[2] });

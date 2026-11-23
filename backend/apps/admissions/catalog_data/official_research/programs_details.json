@@ -202,7 +202,8 @@
     "https://crs.dku.kz/en/osnovnye-napravleniya/programma-po-vodnym-resursam-i-klimatu/letnyaya-shkola-na-aralskom-more/",
     "https://crs.dku.kz/documents/102/Concept_8%D0%90SS_2026_FINAL_DQxoZ6z.pdf"
    ],
-   "edition": "2026"
+   "edition": "2026",
+   "application_url": "https://forms.gle/bj9Q6MoGKsV6Qmpu6"
   }
  },
  {
@@ -249,7 +250,9 @@
    "sources": [
     "https://www.launchx.com/command-post/news/launchx-expands-global-footprint-with-awardx-international-26-pitch-competition"
    ],
-   "edition": "2026"
+   "edition": "2026",
+   "fee_text": "Free to apply and compete",
+   "application_url": "https://www.awardx.com/competitions/26-international"
   }
  },
  {
@@ -315,7 +318,10 @@
     "https://ayfnhq.org/event/scholarship-opportunity-winter-japan-culture-camp-2027-by-ayfn-academy/",
     "https://ayfnhq.org/scholarship-type-and-coverage-winter-japan-culture-camp-2027/"
    ],
-   "edition": "2027"
+   "edition": "2027",
+   "fee_usd": 16,
+   "fee_text": "$16 required e-book purchase; scholarship waives program fee",
+   "application_url": "https://ayfnhq.org/scholarship-type-and-coverage-winter-japan-culture-camp-2027/"
   }
  },
  {
@@ -374,7 +380,10 @@
    "sources": [
     "https://iite.unesco.org/announcements/join-the-2026-global-youth-cipp-campaign/"
    ],
-   "edition": "2026"
+   "edition": "2026",
+   "fee_usd": 0,
+   "fee_text": "Free participation",
+   "application_url": "https://reg.icua-cipp.cn/f/d7Kown"
   }
  },
  {
@@ -616,7 +625,10 @@
     "https://usagermanyscholarship.org/apply/",
     "https://usagermanyscholarship.org/2027-28-cbyx-high-school-application-now-open/"
    ],
-   "edition": "2027-2028"
+   "edition": "2027-2028",
+   "fee_usd": 0,
+   "fee_text": "Scholarship-funded; personal and specified travel/document costs excluded",
+   "application_url": "https://usagermanyscholarship.org/apply/"
   }
  },
  {
@@ -673,7 +685,12 @@
     "https://sce.cornell.edu/pc-dates-winter/",
     "https://sce.cornell.edu/pc-prog-online/"
    ],
-   "edition": "Winter 2027"
+   "edition": "Winter 2027",
+   "fee_usd": 6039,
+   "fee_text": "$6,039–$8,052 tuition for 3–4 credits; $85 application fee",
+   "delivery_mode": "online",
+   "application_url": "https://admissions.sce.cornell.edu/apply/?sr=e7600c7b-ae10-41d5-80c2-cb4b44884799",
+   "city": null
   }
  },
  {
@@ -717,7 +734,8 @@
    "sources": [
     "https://www.crimsoneducation.org/us/about-us/our-scholarships"
    ],
-   "edition": "2026–2027 admissions cycle; fall 2027 university entry"
+   "edition": "2026–2027 admissions cycle; fall 2027 university entry",
+   "fee_text": "Free admissions consulting services"
   }
  },
  {
@@ -871,7 +889,9 @@
    "sources": [
     "https://headwayinstitute.org/future-diplomats-forum-2027-geneva/"
    ],
-   "edition": "2027"
+   "edition": "2027",
+   "fee_text": "$16.50 scholarship application; $299 forum access; $699 self-funded",
+   "application_url": "https://headwayinstitute.org/future-diplomats-forum-2027-geneva/"
   }
  },
  {
@@ -951,7 +971,8 @@
     "https://fpspi.org/challenges/",
     "https://futureproblemsolving.org/"
    ],
-   "edition": "2026"
+   "edition": "2026",
+   "fee_text": "$100 registration per team"
   }
  },
  {
@@ -1092,7 +1113,11 @@
     "https://girlswhocode.zendesk.com/hc/en-us/articles/44034585768347-When-does-Pathways-run",
     "https://girlswhocode.com/pathwaysapply"
    ],
-   "edition": "Spring 2027 Pathways"
+   "edition": "Spring 2027 Pathways",
+   "fee_usd": 0,
+   "fee_text": "Free",
+   "delivery_mode": "online",
+   "application_url": "https://girlswhocode.com/pathwaysapply"
   }
  },
  {
@@ -1178,7 +1203,8 @@
     "https://theogpd.org/gallery/",
     "https://theogpd.org/"
    ],
-   "edition": "2026"
+   "edition": "2026",
+   "fee_text": "$99 invitation only; $399 forum access"
   }
  },
  {
@@ -1290,7 +1316,10 @@
     "https://summer.harvard.edu/parents-guardians-families-of-future-harvard-summer-school-students/",
     "https://summer.harvard.edu/high-school-programs/secondary-school-program/options/"
    ],
-   "edition": "Summer 2027"
+   "edition": "Summer 2027",
+   "fee_usd": 4180,
+   "fee_text": "Secondary School: $4,180–$15,980; Pre-College: $6,250; plus $75 application fee",
+   "application_url": "https://summer.harvard.edu/high-school/admissions/"
   }
  },
  {
@@ -1359,7 +1388,9 @@
    "sources": [
     "https://horizoninspires.com/programs/"
    ],
-   "edition": "Winter 2026"
+   "edition": "Winter 2026",
+   "fee_text": "$6,950 Horizon Labs tuition",
+   "application_url": "https://airtable.com/appVSLDvRVIOB8e97/shrKtvMuFbpIfgIC0"
   }
  },
  {
@@ -1461,7 +1492,10 @@
     "https://www.icu.ac.jp/globalicu/en/news2/GlobalYouthEssay2025.html",
     "https://www.icu.ac.jp/en/news/GlobalYouthEssay2025.html"
    ],
-   "edition": "2025"
+   "edition": "2025",
+   "fee_usd": 0,
+   "fee_text": "Free entry",
+   "application_url": "https://forms.office.com/Pages/ResponsePage.aspx?id=IMFaGOfUcUiIiHFojHWVIpfE3MKBeThNq-UErxji30hUQVZERVM0Vjc3SEFXWkZOWU40Rk0xSDdKNSQlQCN0PWcu"
   }
  },
  {
@@ -1513,7 +1547,9 @@
     "https://www.immerse.education/about/programmes/immerse-essay-competition",
     "https://www.immerse.education/immerse-competitions-hub"
    ],
-   "edition": "2027"
+   "edition": "2027",
+   "fee_text": "No entry fee",
+   "application_url": "https://www.immerse.education/about/programmes/immerse-essay-competition"
   }
  },
  {
@@ -1639,7 +1675,10 @@
     "https://www.icu.ac.jp/globalicu/en/news2/GlobalYouthEssay2025.html",
     "https://www.icu.ac.jp/en/news/GlobalYouthEssay2025.html"
    ],
-   "edition": "2025"
+   "edition": "2025",
+   "fee_usd": 0,
+   "fee_text": "Free entry",
+   "application_url": "https://forms.office.com/Pages/ResponsePage.aspx?id=IMFaGOfUcUiIiHFojHWVIpfE3MKBeThNq-UErxji30hUQVZERVM0Vjc3SEFXWkZOWU40Rk0xSDdKNSQlQCN0PWcu"
   }
  },
  {
@@ -1913,7 +1952,10 @@
     "https://www.ladderinternships.com/our-programs",
     "https://www.ladderinternships.com/ladder-internships-blog/virtual-internships-for-high-school-students"
    ],
-   "edition": "Winter II 2027"
+   "edition": "Winter II 2027",
+   "fee_usd": 3190,
+   "fee_text": "$3,190 Startup Internship Program",
+   "application_url": "https://airtable.com/appx1OFdMpDfxtEkR/shrNdEykWdhc4yeSv"
   }
  },
  {
@@ -1976,7 +2018,11 @@
     "https://www.launchx.com/programs",
     "https://www.launchx.com/command-post/news/launchx-opens-applications-for-2027-programs"
    ],
-   "edition": "Summer 2027 — In-Person Entrepreneurship Program"
+   "edition": "Summer 2027 — In-Person Entrepreneurship Program",
+   "fee_usd": 13495,
+   "fee_text": "$13,495 tuition including housing and food; $250 additional international fee",
+   "delivery_mode": "onsite",
+   "application_url": "https://mymissioncontrol.app/"
   }
  },
  {
@@ -2076,7 +2122,10 @@
    "sources": [
     "https://www.lumiere-education.com/lumiere-programs"
    ],
-   "edition": "Winter 2026"
+   "edition": "Winter 2026",
+   "fee_usd": 3190,
+   "fee_text": "Individual Research $3,190; Premium Research & Publication $6,450; Research Fellowship or Professor Premium $9,900",
+   "application_url": "https://airtable.com/appK9HemdsQBzVefU/shrav6SXijpSQ0Zkp"
   }
  },
  {
@@ -2122,7 +2171,10 @@
    "sources": [
     "https://mcwglobal.org/young-leaders-fellowship-2027/"
    ],
-   "edition": "2027-2028"
+   "edition": "2027-2028",
+   "fee_usd": 100,
+   "fee_text": "$100 deposit, fully refunded after successful July 2027 in-person training",
+   "application_url": "https://applicant.mcwglobal.org/apply/2027-mentee-call-young-leaders-fellowship"
   }
  },
  {
@@ -2248,7 +2300,9 @@
    "sources": [
     "https://www.spaceappschallenge.org/resources/participant-faqs/"
    ],
-   "edition": "2026"
+   "edition": "2026",
+   "fee_text": "Free participation",
+   "application_url": "https://www.spaceappschallenge.org/2026/"
   }
  },
  {
@@ -2298,7 +2352,10 @@
    "sources": [
     "https://www.nsliforyouth.org/how-to-apply/dates-and-deadlines/"
    ],
-   "edition": "Fall 2027 Virtual NSLI-Y"
+   "edition": "Fall 2027 Virtual NSLI-Y",
+   "fee_usd": 0,
+   "fee_text": "Program costs covered by scholarship",
+   "delivery_mode": "online"
   }
  },
  {
@@ -2601,7 +2658,9 @@
    "sources": [
     "https://www.oxfordscholastica.com/resources/essay-competition/"
    ],
-   "edition": "Spring 2025"
+   "edition": "Spring 2025",
+   "fee_usd": 0,
+   "fee_text": "Free entry"
   }
  },
  {
@@ -3063,7 +3122,10 @@
    "sources": [
     "https://stanforddaily.com/workshops/"
    ],
-   "edition": "Winter 2026–2027"
+   "edition": "Winter 2026–2027",
+   "fee_usd": 545,
+   "fee_text": "$545–$595 tuition; Journalism $595, Tech and Multimedia $545 each",
+   "application_url": "https://form.typeform.com/to/OekhnGfY"
   }
  },
  {
@@ -3115,7 +3177,9 @@
     "https://simr.stanford.edu/",
     "https://simr.stanford.edu/frequently-asked-questions.html"
    ],
-   "edition": "Summer 2027"
+   "edition": "Summer 2027",
+   "fee_usd": 0,
+   "fee_text": "No tuition; $50 application fee, waivers available"
   }
  },
  {
@@ -3423,7 +3487,10 @@
     "https://www.experiment.org/apply/",
     "https://www.experiment.org/apply/dates-fees-availability/"
    ],
-   "edition": "Summer 2027"
+   "edition": "Summer 2027",
+   "fee_usd": 6600,
+   "fee_text": "$6,600–$8,420 program fees by destination; airfare additional",
+   "application_url": "https://experiment.worldlearning.org/WL_SiteRegister"
   }
  },
  {
@@ -3478,7 +3545,10 @@
     "https://www.essaycomp.org/faq",
     "https://www.essaycomp.org/terms-conditions"
    ],
-   "edition": "2027"
+   "edition": "2027",
+   "fee_usd": 15,
+   "fee_text": "$15 early bird; $20 regular",
+   "application_url": "https://www.essaycomp.org/register-now"
   }
  },
  {
@@ -3534,7 +3604,10 @@
     "https://tiltingfutures.org/admissions/",
     "https://tiltingfutures.org/program/"
    ],
-   "edition": "February 2027"
+   "edition": "February 2027",
+   "fee_usd": 21000,
+   "fee_text": "$21,000 tuition; need-based aid available",
+   "delivery_mode": "hybrid"
   }
  },
  {
@@ -3812,7 +3885,9 @@
     "https://www.veritasai.com/",
     "https://www.veritasai.com/ai-scholars"
    ],
-   "edition": "Winter 2026"
+   "edition": "Winter 2026",
+   "fee_text": "Varies by track; high school programs start at $2,690",
+   "application_url": "https://bit.ly/VeritasAIApplication"
   }
  },
  {
@@ -3859,7 +3934,10 @@
    "sources": [
     "https://www.veritasai.com/ai-scholars"
    ],
-   "edition": "Winter 2026"
+   "edition": "Winter 2026",
+   "fee_usd": 2690,
+   "fee_text": "$2,690 AI Scholars tuition; need-based aid available",
+   "application_url": "https://bit.ly/VeritasAIApplication"
   }
  },
  {
@@ -3912,7 +3990,8 @@
     "https://www.wheretherebedragons.com/program/gap-year-japan-food-culture",
     "https://www.wheretherebedragons.com/program/summer-abroad-japan-food-culture"
    ],
-   "edition": "2027 program catalog"
+   "edition": "2027 program catalog",
+   "application_url": "https://wheretherebedragons.my.site.com/mydragons/s/apply"
   }
  },
  {
@@ -4123,7 +4202,9 @@
     "https://thecipes.org/yef-dubai-2027"
    ],
    "edition": "2027 — Young Economic Forum Dubai",
-   "title": "Young Economic Forum Dubai 2027"
+   "title": "Young Economic Forum Dubai 2027",
+   "fee_text": "$16.99 funded category; $200 forum access; $599 self-funded; $199 pay-later deposit",
+   "application_url": "https://thecipes.org/yef-dubai-2027"
   }
  },
  {
@@ -4172,7 +4253,9 @@
     "https://www.bennington.edu/news-and-features/9th%E2%80%9312th-grade-students-invited-submit-bennington-college-young-writers-awards-0",
     "https://www.bennington.edu/events/bennington-young-creators-awards/bennington-young-writers-awards"
    ],
-   "edition": "2026–2027"
+   "edition": "2026–2027",
+   "fee_text": "Free to enter",
+   "application_url": "https://admissions.bennington.edu/register/youngcreators"
   }
  },
  {
@@ -4221,7 +4304,9 @@
     "https://www.vfri.ca/human-rights-summit-canada-2027/"
    ],
    "edition": "2027 — Human Rights Summit Canada",
-   "title": "Youth Congress Canada: Human Rights Summit 2027"
+   "title": "Youth Congress Canada: Human Rights Summit 2027",
+   "delivery_mode": "hybrid",
+   "application_url": "https://www.cognitoforms.com/VoiceForRightsInternational/HumanRightsSummitCanada20272"
   }
  },
  {
@@ -4310,7 +4395,10 @@
     "https://www.firstinspires.org/programs/calendar?view=calendar",
     "https://www.firstinspires.org/community-blog/2027-season-checkout-and-registration-changes"
    ],
-   "edition": "2027 — BIOCORE"
+   "edition": "2027 — BIOCORE",
+   "fee_usd": 6500,
+   "fee_text": "$6,500 base team season registration",
+   "application_url": "https://my.firstinspires.org/"
   }
  },
  {
@@ -4663,7 +4751,11 @@
     "https://www.nyas.org/learning/high-school-research-programs/the-junior-academy/",
     "https://www.nyas.org/wp-content/uploads/2024/02/the-new-york-academy-of-sciences-stem-education-10-year-report.pdf"
    ],
-   "edition": "Spring 2027 — Junior Academy successor"
+   "edition": "Spring 2027 — Junior Academy successor",
+   "fee_usd": 0,
+   "fee_text": "Free for participating students",
+   "delivery_mode": "online",
+   "application_url": "https://gsa.smapply.io/prog/student_programs_/"
   }
  },
  {
@@ -4752,7 +4844,10 @@
     "https://technovation.uz/instructions",
     "https://technovationchallenge.org/competition/"
    ],
-   "edition": "2026 — latest announced Uzbekistan season"
+   "edition": "2026 — latest announced Uzbekistan season",
+   "fee_usd": 0,
+   "fee_text": "Free for participants",
+   "delivery_mode": "online"
   }
  },
  {
@@ -5325,7 +5420,9 @@
     "https://www.ashoka.edu.in/ysp-artificial-intelligence-robotics-and-computing-faqs/",
     "https://www.ashoka.edu.in/"
    ],
-   "edition": "2027 — Edition 1, 10-day programmes"
+   "edition": "2027 — Edition 1, 10-day programmes",
+   "fee_text": "INR 85,000 + GST; INR 1,000 application fee",
+   "application_url": "https://apply.ashoka.edu.in/YSPNewCourse.aspx"
   }
  },
  {
@@ -5647,7 +5744,8 @@
     "https://www.bu.edu/summer/high-school-programs/rise-internship-practicum/calendar-of-events/",
     "https://www.bu.edu/summer/high-school-programs/rise-internship-practicum/how-to-apply/"
    ],
-   "edition": "2027 — residential"
+   "edition": "2027 — residential",
+   "application_url": "https://www.bu.edu/summer/high-school-programs/rise-internship-practicum/how-to-apply/"
   }
  },
  {
@@ -5699,7 +5797,8 @@
     "https://www.nslcleaders.org/dates-locations/",
     "https://www.nslcleaders.org/summer-program-scholarships/"
    ],
-   "edition": "Summer 2027"
+   "edition": "Summer 2027",
+   "application_url": "https://portal.nslcleaders.org/register/"
   }
  },
  {
@@ -5915,7 +6014,8 @@
     "https://mitadmissions.org/landing/summer-programs/",
     "https://mites.mit.edu/discover-mites/faq-for-prospective-students/faqs-mites-semester-and-mites-summer/"
    ],
-   "edition": "2027"
+   "edition": "2027",
+   "fee_text": "Free tuition, food and housing; students pay transportation."
   }
  },
  {
@@ -6161,7 +6261,12 @@
     "https://kenyonreview.org/high-school-workshops/",
     "https://kenyonreview.org/event/young-writers-winter-online-workshops/"
    ],
-   "edition": "Winter 2027 — online"
+   "edition": "Winter 2027 — online",
+   "fee_usd": 695,
+   "fee_text": "$695 tuition; no application fee",
+   "delivery_mode": "online",
+   "application_url": "https://kenyonreviewworkshops.submittable.com/submit/3eb78f6b-b543-4da9-a7f9-544c30c3b930/2027-young-writers-winter-online-application",
+   "city": null
   }
  },
  {
@@ -6295,7 +6400,10 @@
     "https://lumiere.foundation/breakthrough-program",
     "https://lumiere.foundation/application"
    ],
-   "edition": "Winter 2026"
+   "edition": "Winter 2026",
+   "fee_usd": 0,
+   "fee_text": "Free for accepted Breakthrough Scholars",
+   "application_url": "https://airtable.com/appK9HemdsQBzVefU/shr9aIyrRZ0GBwdkj"
   }
  },
  {

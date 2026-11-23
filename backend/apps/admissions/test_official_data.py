@@ -367,6 +367,26 @@ class ImportProgramDetailsTests(APITestCase):
         self.program.refresh_from_db()
         self.assertEqual(self.program.requirements_list, items)
 
+    def test_an_edition_also_replaces_fee_delivery_city_and_apply_page(self):
+        OpportunityProgram.objects.filter(pk=self.program.pk).update(
+            fee_usd=3095, fee_text='$3,095 residential', delivery_mode='hybrid', city='Gambier (residential)', application_url='https://example.org/summer',
+        )
+        self.load(self.detail(edition_core={
+            'city': None, 'fee_usd': 695, 'fee_text': '$695 tuition', 'delivery_mode': 'online', 'application_url': 'https://example.org/winter',
+        }))
+        self.program.refresh_from_db()
+        self.assertEqual((self.program.fee_usd, self.program.fee_text, self.program.delivery_mode), (695, '$695 tuition', 'online'))
+        self.assertEqual((self.program.city, self.program.application_url), ('', 'https://example.org/winter'))
+
+    def test_the_details_deadline_is_used_when_nothing_else_has_one(self):
+        self.load(self.detail(deadline='2026-12-16'))
+        self.program.refresh_from_db()
+        self.assertEqual(str(self.program.deadline), '2026-12-16')
+        OpportunityProgram.objects.filter(pk=self.program.pk).update(deadline='2027-01-01')
+        self.load(self.detail(deadline='2026-12-16'))
+        self.program.refresh_from_db()
+        self.assertEqual(str(self.program.deadline), '2027-01-01')
+
     def test_a_newer_edition_replaces_the_older_place_dates_and_sources(self):
         OpportunityProgram.objects.filter(pk=self.program.pk).update(
             country='United States', city='Washington DC', start_date='2025-04-03', end_date='2025-04-05', deadline_text='2025 deadline', deadline='2025-01-01',
