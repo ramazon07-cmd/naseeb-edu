@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronUp, Compass, Feather, HeartHandshake, Info, LayoutList, Lightbulb, MessageCircleQuestion, RefreshCw, Lock, Sparkles, Star, Target, Undo2, X } from 'lucide-react'
 import { t, tp } from '../i18n.js'
+import CheckProgress from './CheckProgress.jsx'
 import {
   SCORE_HIDDEN_TEXT, STRENGTHS, coachSource, criteriaFor, deltaSince, doneNotes, explainFor, goneNotes, headline, levelWord, nearBandEdge, normalizeCheck, openNotes, recheckBlock,
 } from './coachModel.js'
@@ -177,9 +178,9 @@ function CoachPanel({
     </div>}
 
     <div className="el-coach-body" ref={bodyRef} id="el-coach-panel" role={model ? 'tabpanel' : undefined} aria-labelledby={model ? `el-tab-${tab}` : undefined}>
-      {status.loading && <div className="el-coach-loading" role="status">
+      <CheckProgress active={Boolean(status.loading)} failed={Boolean(status.error)} />
+      {status.loading && <div className="el-coach-loading" aria-hidden="true">
         <span className="el-shimmer is-big" /><span className="el-shimmer" /><span className="el-shimmer is-short" />
-        <p>{t('Naseeb AI is reading your essay. This can take up to a minute or two.')}</p>
       </div>}
       {errorText && !footerError && !status.loading && <div className="el-alert is-error" role="alert">{errorText}</div>}
 

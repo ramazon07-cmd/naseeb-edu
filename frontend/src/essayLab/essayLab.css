@@ -2888,6 +2888,60 @@
   color: var(--el-muted);
 }
 
+.el-check-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--el-surface);
+  border: 1px solid var(--el-line);
+}
+
+.el-check-progress-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--text-sm);
+}
+
+.el-check-progress-top strong {
+  color: var(--el-ink);
+}
+
+.el-check-progress-top span {
+  color: var(--el-muted);
+  white-space: nowrap;
+}
+
+.el-check-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--el-track);
+  overflow: hidden;
+}
+
+.el-check-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--el-primary);
+  transition: width 0.5s ease-out;
+}
+
+.el-check-progress p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--el-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .el-check-bar span {
+    transition: none;
+  }
+}
+
 .el-shimmer {
   height: 12px;
   border-radius: 6px;
