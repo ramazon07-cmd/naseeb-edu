@@ -176,7 +176,7 @@ class TelegramImportTests(TestCase):
         from apps.admissions import ai_providers
         gateway = self.gateway
 
-        def cli(body, timeout):
+        def cli(body, timeout, **kwargs):
             return gateway(body)
 
         with override_settings(AI_PROVIDER='claude_cli', AI_GATEWAY_API_KEY='', AI_CLI_ALLOW_PRODUCTION=True), \
@@ -1014,3 +1014,85 @@ class DateYearTests(TestCase):
         self.assertIsNone(result['deadline'])
         kept = rules.ground(self.result(deadline=date(2027, 5, 27), deadline_text='27 May 2027'), 'Apply by 27 May 2027')
         self.assertEqual(kept['deadline'], date(2027, 5, 27))
+
+
+CLI_IMPORT = dict(
+    AI_PROVIDER='gateway', TELEGRAM_IMPORT_AI_PROVIDER='claude_cli', AI_GATEWAY_API_KEY='', AI_CLI_ALLOW_PRODUCTION=True,
+    APP_ENV='production',
+)
+GOOD = {'is_program': True, 'title': 'Young Inventors Prize', 'provider': 'Example Org', 'deadline': '2026-12-31'}
+
+
+class CliAnswerTests(TestCase):
+    """The CLI has no JSON mode: what comes back is cut, checked and, when unusable, asked for once more."""
+
+    def test_the_first_json_object_is_found_among_prose_and_fences(self):
+        self.assertEqual(formatter.extract_json('Sure! Here it is:\n```json\n{"a": 1}\n```\nHope that helps {x}'), {'a': 1})
+        self.assertEqual(formatter.extract_json('{"a": {"b": "}"}} trailing'), {'a': {'b': '}'}})
+        self.assertEqual(formatter.extract_json('note {not json} then {"ok": true}'), {'ok': True})
+        for bad in ('', 'no json here', '{"cut": '):
+            with self.assertRaises(ValueError):
+                formatter.extract_json(bad)
+
+    def ask(self, *answers):
+        calls = []
+
+        def post(body):
+            calls.append(body)
+            reply = answers[len(calls) - 1]
+            if isinstance(reply, Exception):
+                raise reply
+            return {'model': body['model'], 'choices': [{'message': {'content': reply}}],
+                    'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2}}
+        with override_settings(**{**AI_ON, **CLI_IMPORT}), mock.patch.object(formatter, '_post', post):
+            post_obj = mock.Mock(posted_at='2026-11-20T10:00:00+00:00')
+            try:
+                result = formatter.format_post(post_obj, 'text', ['https://example.org/x'], TODAY)
+            except Exception as exc:  # noqa: BLE001 - the tests check which one
+                result = exc
+        return result, calls
+
+    def test_the_import_uses_the_cli_with_a_tight_prompt_and_no_gateway_only_options(self):
+        result, calls = self.ask('Here you go: ' + json.dumps(GOOD))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result['title'], 'Young Inventors Prize')
+        body = calls[0]
+        self.assertEqual(body['model'], 'claude-cli/' + settings.AI_TEST_CLI_MODEL)
+        self.assertNotIn('reasoning_effort', body)
+        self.assertIn('first character of your reply is "{"', body['messages'][0]['content'])
+
+    def test_an_unusable_reply_gets_one_follow_up_then_works(self):
+        result, calls = self.ask('I think this is a program but I am not sure.', json.dumps(GOOD))
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1]['messages'][-1]['role'], 'user')
+        self.assertIn('only the valid JSON', calls[1]['messages'][-1]['content'])
+        self.assertTrue(result['is_program'])
+
+    def test_a_wrongly_shaped_reply_is_asked_again_and_two_failures_count_as_one_failed_attempt(self):
+        result, calls = self.ask('{"title": "no is_program"}', '{"is_program": "yes"}')
+        self.assertEqual(len(calls), 2)
+        self.assertIsInstance(result, formatter.FormatterUnavailable)
+
+    def test_a_cli_error_is_an_outage_not_a_failed_post(self):
+        result, calls = self.ask(OSError('The claude CLI exited with 1'))
+        self.assertIsInstance(result, formatter.GatewayDown)
+        result, calls = self.ask(TimeoutError('Every Claude CLI slot stayed busy'))
+        self.assertIsInstance(result, formatter.GatewayDown)
+        self.assertEqual(len(calls), 1)
+
+    def test_the_import_is_ready_on_the_cli_after_the_app_moves_to_the_gateway(self):
+        with override_settings(**{**AI_ON, **CLI_IMPORT}), mock.patch('apps.admissions.ai_providers.shutil.which', return_value='/bin/claude'):
+            self.assertTrue(formatter.gateway_configured())
+        with override_settings(**{**AI_ON, **CLI_IMPORT, 'TELEGRAM_IMPORT_AI_PROVIDER': '', 'AI_PROVIDER': 'gateway'}):
+            self.assertFalse(formatter.gateway_configured())  # no key, and not on the CLI
+
+    def test_the_call_reserves_a_cli_slot_for_students_and_waits_briefly(self):
+        seen = {}
+
+        def chat(body, timeout, **kwargs):
+            seen.update(kwargs)
+            return {'choices': [{'message': {'content': json.dumps(GOOD)}}], 'usage': {}}
+        with override_settings(**{**AI_ON, **CLI_IMPORT, 'TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS': 2}), \
+                mock.patch('apps.admissions.ai_providers.chat', chat):
+            formatter._post({'messages': []})
+        self.assertEqual(seen, {'override': 'claude_cli', 'slot_wait': 2, 'reserve': 1})

@@ -152,7 +152,7 @@ def _create(post, result, page, catalog):
                     'message_id': post.id,
                     'posted_at': post.posted_at,
                     'imported_at': timezone.now().isoformat(timespec='seconds'),
-                    'model': settings.TELEGRAM_IMPORT_MODEL,
+                    'model': ai_providers.active_model(settings.TELEGRAM_IMPORT_MODEL, settings.TELEGRAM_IMPORT_AI_PROVIDER),
                     'official_page_read': page['url'] if page else '',
                     'problems': result['problems'],
                 },

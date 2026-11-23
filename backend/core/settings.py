@@ -184,6 +184,11 @@ TELEGRAM_IMPORT_CHANNELS = config(
     default='opportunitiescircleofficial,opcorners,edugrandsuz,grantlar,grantgouz,youthgrants',
     cast=Csv(),
 )
+# Blank follows AI_PROVIDER. `claude_cli` keeps the import on the Claude CLI even after the gateway key is set
+# and AI_PROVIDER is removed (needs AI_CLI_ALLOW_PRODUCTION in production). It never takes the last CLI slot
+# from a student and waits at most TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS for one.
+TELEGRAM_IMPORT_AI_PROVIDER = config('TELEGRAM_IMPORT_AI_PROVIDER', default='').strip().lower()
+TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS = config('TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS', default=3, cast=int)
 TELEGRAM_IMPORT_MODEL = config('TELEGRAM_IMPORT_MODEL', default=ESSAY_COACH_MODEL).strip()
 # Sent as `reasoning_effort` (empty = not sent); dropped for one retry if the gateway rejects it.
 TELEGRAM_IMPORT_REASONING_EFFORT = config(
@@ -261,6 +266,7 @@ environment_errors = validate_runtime_environment(
     demo_accounts_enabled=DEMO_ACCOUNTS_ENABLED,
     hosted=HOSTED_RUNTIME,
     ai_provider=AI_PROVIDER,
+    telegram_import_ai_provider=TELEGRAM_IMPORT_AI_PROVIDER,
     ai_cli_allow_production=AI_CLI_ALLOW_PRODUCTION,
 )
 if environment_errors:

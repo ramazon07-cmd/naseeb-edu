@@ -35,7 +35,9 @@ Return only one JSON object with exactly these keys:
 - "is_program": true only if the post announces one specific program, scholarship, competition, olympiad,
   exchange, summer school, fellowship, conference or internship that a student can apply to.
   false for adverts, news, giveaways, webinars selling something, paid consulting or agency services,
-  courses for sale, lists of many opportunities, and anything else.
+  courses for sale, lists of many opportunities, and anything else. Also false when the source says it is only
+  for university students, graduates, teachers, researchers, startups or professionals, or sets a minimum age
+  of 18 or more: the catalog is for school students (grades 5-11) and school leavers.
 - "title": the program's own name, at most 200 characters.
 - "provider": the organisation that runs it, at most 160 characters.
 - "program_type": "national" if it is in or only for Uzbekistan, "international" otherwise, "unspecified" if unclear.
@@ -88,7 +90,7 @@ MARKERS = re.compile(r'<<<|>>>|POST_TEXT|OFFICIAL_PAGE')
 
 
 def gateway_configured():
-    return outbound_ai_allowed() and ai_providers.configured()
+    return outbound_ai_allowed() and ai_providers.configured(settings.TELEGRAM_IMPORT_AI_PROVIDER)
 
 
 def data(value):
@@ -124,9 +126,20 @@ def user_message(post, text, links, today, page=None):
     return message
 
 
+def uses_cli():
+    return ai_providers.uses_cli(settings.TELEGRAM_IMPORT_AI_PROVIDER)
+
+
 def _post(body):
-    """One call through the shared provider (gateway, or the Claude CLI bridge)."""
-    return ai_providers.chat(body, settings.TELEGRAM_IMPORT_TIMEOUT_SECONDS)
+    """One call through the provider chosen for the import (gateway, or the Claude CLI).
+
+    On the CLI the import never takes the last slot (a student's request keeps it) and gives up
+    after TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS without one: the run stops, the post waits.
+    """
+    return ai_providers.chat(
+        body, settings.TELEGRAM_IMPORT_TIMEOUT_SECONDS, override=settings.TELEGRAM_IMPORT_AI_PROVIDER,
+        slot_wait=settings.TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS, reserve=1,
+    )
 
 
 def _rejects_reasoning(exc):
@@ -139,10 +152,56 @@ def _rejects_reasoning(exc):
         return False
 
 
+CLI_RULES = (
+    '\n\nOutput format: reply with the one JSON object and nothing else. The first character of your reply is "{" '
+    'and the last is "}". No sentences before or after it, no code fences, no comments. Use exactly the keys above '
+    '(is_program is a JSON true/false, deadline and dates are "YYYY-MM-DD" strings or null, fee_usd is a whole '
+    'number or null).'
+)
+RETRY_MESSAGE = (
+    'That was not valid JSON for the schema. Return only the valid JSON object now: start with "{", end with "}", '
+    'no other text.'
+)
+
+
+def extract_json(text):
+    """The first complete JSON object in ``text`` (fences and surrounding prose ignored). ValueError if none."""
+    text = str(text or '')
+    decoder = json.JSONDecoder()
+    start = text.find('{')
+    while start != -1:
+        try:
+            value, _ = decoder.raw_decode(text, start)
+        except ValueError:
+            value = None
+        if isinstance(value, dict):
+            return value
+        start = text.find('{', start + 1)
+    raise ValueError('No JSON object in the reply.')
+
+
+def _call(body):
+    try:
+        payload = _post(body)
+    except urllib.error.HTTPError as exc:
+        effort = body.get('reasoning_effort')
+        if not (effort and _rejects_reasoning(exc)):
+            raise
+        body.pop('reasoning_effort')
+        payload = _post(body)
+    ai_usage.capture(payload, body)
+    return payload['choices'][0]['message']['content']
+
+
 def request_gateway(messages):
-    """One non-streaming JSON-mode call. Pinned model, temperature 0, no fallback model."""
+    """One JSON answer. Gateway: non-streaming JSON mode, pinned model, temperature 0, no fallback model.
+    Claude CLI: no JSON mode, so the prompt is tightened, the first JSON object is cut out of the reply and,
+    when the reply is unusable, one follow-up asks for only the JSON before the attempt counts as failed."""
+    cli = uses_cli()
+    if cli:
+        messages = [dict(m, content=m['content'] + CLI_RULES) if m.get('role') == 'system' else m for m in messages]
     body = {
-        'model': ai_providers.active_model(settings.TELEGRAM_IMPORT_MODEL),
+        'model': ai_providers.active_model(settings.TELEGRAM_IMPORT_MODEL, settings.TELEGRAM_IMPORT_AI_PROVIDER),
         'messages': messages,
         'response_format': {'type': 'json_object'},
         'temperature': 0,
@@ -150,19 +209,20 @@ def request_gateway(messages):
         'max_completion_tokens': settings.TELEGRAM_IMPORT_MAX_OUTPUT_TOKENS,
     }
     effort = (settings.TELEGRAM_IMPORT_REASONING_EFFORT or '').strip()
-    if effort:
+    if effort and not cli:
         body['reasoning_effort'] = effort
+    content = _call(body)
+    if not cli:
+        return json.loads(re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE))
     try:
-        payload = _post(body)
-    except urllib.error.HTTPError as exc:
-        if not (effort and _rejects_reasoning(exc)):
-            raise
-        body.pop('reasoning_effort')
-        payload = _post(body)
-    ai_usage.capture(payload, body)
-    content = payload['choices'][0]['message']['content']
-    content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE)
-    return json.loads(content)
+        raw = extract_json(content)
+        validate(raw)  # only to learn whether the answer is usable; the caller validates again
+        return raw
+    except ValueError:
+        body['messages'] = messages + [
+            {'role': 'assistant', 'content': str(content)[:2000]}, {'role': 'user', 'content': RETRY_MESSAGE},
+        ]
+        return extract_json(_call(body))
 
 
 def _text(value, limit):
