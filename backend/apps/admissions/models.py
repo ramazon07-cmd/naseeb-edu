@@ -442,6 +442,12 @@ class University(TimeStampedModel):
         NEED_BLIND = 'need_blind', 'Need-blind for international students'
         NEED_AWARE = 'need_aware', 'Need-aware for international students'
 
+    class IntlAidAvailability(models.TextChoices):
+        YES = 'yes', 'Yes'
+        LIMITED = 'limited', 'Limited'
+        NO = 'no', 'No'
+        UNKNOWN = 'unknown', 'Unknown'
+
     name = models.CharField(max_length=220)
     country = models.CharField(max_length=120)
     market = models.CharField(max_length=20, choices=Market.choices, blank=True, db_index=True)
@@ -479,7 +485,7 @@ class University(TimeStampedModel):
     css_profile_required = models.BooleanField(default=False)
     fafsa_required = models.BooleanField(default=False)
     aid_application_notes = models.TextField(blank=True)
-    financial_aid_url = models.URLField(blank=True)
+    financial_aid_url = models.URLField(max_length=500, blank=True)
     popular_majors = models.CharField(max_length=300, blank=True, help_text='Comma-separated majors')
     application_deadline = models.DateField(null=True, blank=True)
     scholarship_deadline = models.DateField(null=True, blank=True)
@@ -495,6 +501,24 @@ class University(TimeStampedModel):
     requirements_source_url = models.URLField(max_length=500, blank=True)
     requirements_verified_at = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    # Aid for international undergraduates as the university's own website states it
+    # (management command import_official_aid). Blank/null means unknown, never "no".
+    intl_aid_availability = models.CharField(max_length=10, choices=IntlAidAvailability.choices, blank=True)
+    intl_need_based = models.BooleanField(null=True, blank=True)
+    intl_merit_based = models.BooleanField(null=True, blank=True)
+    intl_full_ride = models.BooleanField(null=True, blank=True)
+    intl_meets_full_need = models.BooleanField(null=True, blank=True)
+    aid_currency = models.CharField(max_length=3, blank=True)
+    # Per-year amounts in aid_currency as published, and their USD conversion (aid_fx.py).
+    intl_max_award = models.PositiveIntegerField(null=True, blank=True)
+    intl_min_student_pays = models.PositiveIntegerField(null=True, blank=True)
+    intl_max_award_usd = models.PositiveIntegerField(null=True, blank=True)
+    intl_typical_award_usd = models.PositiveIntegerField(null=True, blank=True)
+    intl_min_student_pays_usd = models.PositiveIntegerField(null=True, blank=True)
+    aid_fx_rate = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    aid_academic_year = models.CharField(max_length=20, blank=True)
+    aid_sources = models.JSONField(default=list, blank=True)
+    aid_verified_at = models.DateField(null=True, blank=True)
     # Name, city and country spellings folded for search (search_text.py); kept by save().
     search_text = models.TextField(blank=True, default='', editable=False)
 
@@ -682,6 +706,13 @@ class OpportunityProgram(TimeStampedModel):
     requirements = models.TextField(blank=True)
     application_url = models.URLField(max_length=1000, blank=True)
     is_active = models.BooleanField(default=True)
+    # Researched from the organiser's own site (management command import_official_programs).
+    # Null means the official site does not say, never "no".
+    open_to_international = models.BooleanField(null=True, blank=True)
+    open_to_uzbekistan = models.BooleanField(null=True, blank=True)
+    fee_text = models.CharField(max_length=300, blank=True)
+    official_sources = models.JSONField(default=list, blank=True)
+    official_verified_at = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ['program_type', 'deadline', 'title']

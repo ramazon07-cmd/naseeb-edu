@@ -184,6 +184,9 @@ def has_aid_data(university):
     """Whether the catalogue says anything about this university's aid (see ``AID_DETAILS``)."""
     if any(getattr(university, name) for name in OFFERED_AID):
         return True
+    # An official answer (yes, limited or no) is data; "unknown" and blank are not.
+    if getattr(university, 'intl_aid_availability', '') in ('yes', 'limited', 'no'):
+        return True
     return any(
         getattr(university, name) is not None if name in AID_AMOUNTS else bool(getattr(university, name))
         for name in AID_DETAILS

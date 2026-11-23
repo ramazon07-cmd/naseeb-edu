@@ -37,6 +37,7 @@ export function academicStanding(position) {
 export function costText(university) {
   const budget = money(university.budget_usd);
   if (university.cost_vs_budget === 'within') return tx`Within your budget of ${budget}`;
+  if (university.cost_vs_budget === 'within_with_aid') return tx`Within your budget of ${budget} with the largest aid`;
   if (university.cost_vs_budget === 'over') return tx`Over your budget of ${budget}`;
   if (university.cost_vs_budget === 'no_budget') return t("Set your budget to compare");
   return t("Cost unknown");
@@ -52,6 +53,7 @@ export function matchMessage(entry) {
   if (code === 'test_needed') return tx`${params.count} universities were left out because they expect an SAT or ACT score; add yours to see them.`;
   if (code === 'aid_unknown') return tx`${params.count} universities were left out: the catalogue has no aid details.`;
   if (code === 'no_intl_aid') return tx`${params.count} universities were left out: they list no aid for students from abroad.`;
+  if (code === 'over_budget_with_aid') return tx`${params.count} universities were left out: even with the largest aid they publish, you would pay more than your budget.`;
   if (code === 'no_admission_data') return tx`${params.count} universities were left out because the catalogue has no admission data to place them.`;
   return text;
 }

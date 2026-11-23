@@ -194,3 +194,35 @@ export function nextDeadline(applications) {
   filter((item) => item.days != null && item.days >= 0).
   sort((a, b) => a.days - b.days)[0];
 }
+
+// Aid for international students as the university's own site states it (backend aid fields). Works on a match
+// card's `aid` object and on a raw university record. Unknown stays "Unknown", never "No".
+const AID_LABELS = { yes: 'Yes', limited: 'Limited', no: 'No', unknown: 'Unknown' };
+
+export function officialAid(source) {
+  if (!source) return null;
+  const raw = source.availability !== undefined ? source : {
+    availability: source.intl_aid_availability, max_award_usd: source.intl_max_award_usd,
+    min_student_pays_usd: source.intl_min_student_pays_usd, source_url: source.financial_aid_url,
+    academic_year: source.aid_academic_year, verified_at: source.aid_verified_at,
+  };
+  const availability = AID_LABELS[raw.availability] && raw.availability ? raw.availability : 'unknown';
+  return {
+    availability,
+    label: AID_LABELS[availability],
+    maxAward: raw.max_award_usd ?? null,
+    minPays: raw.min_student_pays_usd ?? null,
+    url: raw.source_url || null,
+    year: raw.academic_year || null,
+    verifiedAt: raw.verified_at || null,
+  };
+}
+
+// The translated lines a card or page shows: availability, "Up to $X/yr" and "You'd pay at least $Y/yr" (each only when published).
+export function officialAidLines(aid) {
+  if (!aid) return [];
+  const lines = [{ key: 'availability', text: t(aid.label) }];
+  if (aid.maxAward != null && aid.availability !== 'no') lines.push({ key: 'max', text: tx`Up to ${money(aid.maxAward)}/yr` });
+  if (aid.minPays != null) lines.push({ key: 'min', text: tx`You'd pay at least ${money(aid.minPays)}/yr` });
+  return lines;
+}

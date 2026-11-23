@@ -119,3 +119,20 @@ test('the explanations request waits at least as long as the backend AI deadline
   assert.ok(timeoutMs > deadlineSeconds * 1000, 'the client must not abort before the server deadline');
   assert.match(call, /retries: 0/);
 });
+
+test('official aid reads Yes/Limited/No/Unknown, never turns unknown into no, and shows amounts only when published', async () => {
+  const { officialAid, officialAidLines } = await import('../src/lib/college.js');
+  const texts = (source) => officialAidLines(officialAid(source)).map((line) => line.text);
+  assert.deepEqual(texts({ availability: 'yes', max_award_usd: 50000, min_student_pays_usd: 0, source_url: 'https://x.edu/aid' }), ['Yes', 'Up to US$50,000/yr', "You'd pay at least US$0/yr"]);
+  assert.deepEqual(texts({ availability: 'limited', max_award_usd: null, min_student_pays_usd: 12000 }), ['Limited', "You'd pay at least US$12,000/yr"]);
+  assert.deepEqual(texts({ availability: 'no', max_award_usd: 9000 }), ['No']);
+  assert.deepEqual(texts({ availability: 'unknown' }), ['Unknown']);
+  // A raw university record without researched aid is unknown, not "No".
+  assert.deepEqual(texts({ intl_aid_availability: '', offers_international_aid: false }), ['Unknown']);
+  assert.deepEqual(texts({ intl_aid_availability: 'limited', intl_max_award_usd: 5000, financial_aid_url: 'https://x.edu/a' }), ['Limited', 'Up to US$5,000/yr']);
+  assert.equal(officialAid({ intl_aid_availability: 'yes', financial_aid_url: 'https://x.edu/a' }).url, 'https://x.edu/a');
+});
+
+test('a cost above the budget but inside it after the largest aid says so', () => {
+  assert.equal(costText({ cost_vs_budget: 'within_with_aid', budget_usd: 20000 }), 'Within your budget of US$20,000 with the largest aid');
+});

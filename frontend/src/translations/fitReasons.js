@@ -112,6 +112,16 @@ export const FIT_REASON_TEMPLATES = {
     uz: 'Katalogga ko‘ra bu universitetda xalqaro, iqtidor yoki ehtiyojga asoslangan yordam yo‘q',
     ru: 'По данным каталога, в этом университете нет помощи иностранным студентам, за успехи или по нуждаемости',
   },
+  aid_fits_budget: {
+    en: 'With the largest published aid you would pay at least {pays} a year, within your budget of {budget}',
+    uz: 'Eng katta e’lon qilingan yordam bilan yiliga kamida {pays} to‘laysiz, bu byudjetingiz ({budget}) doirasida',
+    ru: 'С максимальной опубликованной помощью вы заплатите не меньше {pays} в год, это в пределах бюджета ({budget})',
+  },
+  aid_over_budget: {
+    en: 'Even with the largest published aid you would pay at least {pays} a year, above your budget of {budget}',
+    uz: 'Eng katta e’lon qilingan yordam bilan ham yiliga kamida {pays} to‘laysiz, bu byudjetingiz ({budget}) dan yuqori',
+    ru: 'Даже с максимальной опубликованной помощью вы заплатите не меньше {pays} в год, это выше бюджета ({budget})',
+  },
   aid_unknown: {
     en: 'Financial aid details are not listed in the catalog',
     uz: 'Moliyaviy yordam tafsilotlari katalogda ko‘rsatilmagan',

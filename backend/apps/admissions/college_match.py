@@ -7,10 +7,13 @@ The same profile always gives the same list. Every step is a rule over catalogue
 2. Candidates are the universities with a QS 2026 subject rank in any of those subjects, in the
    student's target countries. Universities without a subject rank whose popular majors name the
    major may follow the ranked ones.
-3. Aid and cost gates (``passes_gate``) drop universities a student who needs money cannot afford.
+3. Aid and cost gates (``passes_gate``) drop universities a student who needs money cannot afford,
+   including ones whose official minimum yearly cost after aid is above the student's budget.
 4. The chance band comes from admission_chance.chance with the academics score only: activities and
    essays are neutral there, so they never change who is listed or the band.
-5. Within a band: subject rank, then aid for international students, then the international admit rate
+5. Within a band: subject rank, then whether the student can afford it (the least they must still pay after
+   the largest published aid, ``intl_min_student_pays_usd``, against their budget), then aid for international
+   students, then the international admit rate
    (admission_chance.international_rate, the same rate the band uses), then overall QS rank, then name.
 6. Three reach (reach, then at most one far reach), four target and three safety universities. A short
    band is filled from the nearest band and the response says so.
@@ -38,17 +41,31 @@ FILL_ORDER = {'reach': ('target', 'safety'), 'target': ('reach', 'safety'), 'saf
 MAX_FAR_REACH = 1
 MATCH_PROGRAMS = 2
 COST_CAP_FACTOR = 2
-AID_ORDER = {'yes': 0, 'need_aware': 1, 'merit': 2, 'none': 3, 'unknown': 4}
+AID_ORDER = {'yes': 0, 'need_aware': 1, 'limited': 2, 'merit': 3, 'none': 4, 'unknown': 5}
 NO_RANK = 10 ** 9
-MATCH_FIELDS = (*SCORING_FIELDS, 'name', 'ranking_label', 'tuition_usd')
+AID_FIELDS = (
+    'intl_aid_availability', 'intl_max_award_usd', 'intl_min_student_pays_usd', 'financial_aid_url',
+    'aid_verified_at', 'aid_academic_year', 'intl_merit_based', 'intl_need_based', 'intl_full_ride',
+)
+MATCH_FIELDS = (*SCORING_FIELDS, *AID_FIELDS, 'name', 'ranking_label', 'tuition_usd')
 
 
 def aid_status(university):
-    """What the catalogue says about aid for a student from abroad: yes, need_aware, merit, none or unknown."""
+    """What the catalogue says about aid for a student from abroad: yes, limited, need_aware, merit, none or unknown.
+
+    An official answer (``intl_aid_availability``: yes, limited, no) wins; "unknown" falls back to the older flags.
+    """
+    availability = university.intl_aid_availability
+    if availability == University.IntlAidAvailability.NO:
+        return 'none'
+    if availability == University.IntlAidAvailability.LIMITED:
+        return 'limited'
     policy = university.intl_need_policy
     if policy == University.IntlNeedPolicy.NEED_BLIND or (
         university.offers_international_aid and (university.meets_full_need or university.need_blind)
     ):
+        return 'yes'
+    if availability == University.IntlAidAvailability.YES:
         return 'yes'
     if policy == University.IntlNeedPolicy.NEED_AWARE:
         return 'need_aware'
@@ -60,6 +77,11 @@ def aid_status(university):
 
 
 def gives_international_aid(university):
+    availability = university.intl_aid_availability
+    if availability in (University.IntlAidAvailability.YES, University.IntlAidAvailability.LIMITED):
+        return True
+    if availability == University.IntlAidAvailability.NO:
+        return False
     return bool(university.offers_international_aid or university.intl_need_policy)
 
 
@@ -82,16 +104,39 @@ def international_cost(university):
     return cost if cost is not None else university.tuition_usd
 
 
+def min_student_pays(university):
+    """The least a student must still pay per year after the largest published aid, in USD; None when unknown."""
+    return university.intl_min_student_pays_usd
+
+
+def affordable_with_aid(university, budget):
+    """True/False: the official minimum after aid is within/above the budget. None: unknown (never "no")."""
+    pays = min_student_pays(university)
+    if pays is None or budget is None:
+        return None
+    return pays <= budget
+
+
+def affordability_tier(university, budget):
+    """0 affordable with aid (official numbers), 1 unknown, 2 still over the budget after the largest aid."""
+    result = affordable_with_aid(university, budget)
+    return 1 if result is None else 0 if result else 2
+
+
 def passes_gate(university, cost, ctx):
     """The aid and cost gate for a student's budget.
 
     * Needs a scholarship and the university gives none to students from abroad: kept only when it
       is known to cost no more than the budget (an unknown cost or budget drops it).
     * Costs more than twice the budget and gives no aid to students from abroad: dropped.
+    * Needs a scholarship and even the largest published aid leaves more than the budget to pay: dropped
+      (``affordable_with_aid`` is None, unknown, when the official numbers are missing, and then it stays).
     """
+    budget = ctx['budget']
+    if ctx['scholarship_needed'] and affordable_with_aid(university, budget) is False:
+        return False
     if gives_international_aid(university):
         return True
-    budget = ctx['budget']
     if ctx['scholarship_needed'] and (cost is None or budget is None or cost > budget):
         return False
     return not (cost is not None and budget is not None and cost > COST_CAP_FACTOR * budget)
@@ -113,12 +158,15 @@ def sat_position(university, sat, act=None):
     return {'position': position, 'score': sat, 'min': low, 'max': high}
 
 
-def budget_position(cost, budget):
+def budget_position(cost, budget, min_pays=None):
+    """within; within_with_aid (costs more than the budget but the largest published aid brings it inside); over."""
     if cost is None:
-        return 'unknown'
+        return 'unknown' if min_pays is None or budget is None else ('within_with_aid' if min_pays <= budget else 'over')
     if budget is None:
         return 'no_budget'
-    return 'within' if cost <= budget else 'over'
+    if cost <= budget:
+        return 'within'
+    return 'within_with_aid' if min_pays is not None and min_pays <= budget else 'over'
 
 
 def rank_label(rank, label):
@@ -196,10 +244,11 @@ class _Place:
         self.country, self.qs_data = country, {'region': region}
 
 
-def sort_key(university, pick, status):
+def sort_key(university, pick, status, budget=None):
     rate = admission_chance.international_rate(university)[0]
     return (
         pick['rank'] if pick['rank'] is not None else NO_RANK,
+        affordability_tier(university, budget),
         AID_ORDER[status],
         0 if rate is not None else 1, -(rate or 0),
         university.ranking or NO_RANK,
@@ -254,6 +303,7 @@ def left_out_notes(counts):
         'test_needed': '{n} universities were left out because they expect an SAT or ACT score; add yours to see them',
         'aid_unknown': '{n} universities were left out: the catalogue has no aid details',
         'no_intl_aid': '{n} universities were left out: they list no aid for students from abroad',
+        'over_budget_with_aid': '{n} universities were left out: even with the largest aid they publish, you would pay more than your budget',
         'no_admission_data': '{n} universities were left out because the catalogue has no admission data to place them',
     }
     return [{'code': code, 'params': {'count': counts[code]}, 'text': text.format(n=counts[code])}
@@ -271,13 +321,16 @@ def match_with_context(profile):
     picks = candidates(subject_codes, majors, ctx)
     universities = with_cost(University.objects.only(*MATCH_FIELDS)).filter(pk__in=list(picks))
     entries = []
-    left_out = dict.fromkeys(('test_needed', 'aid_unknown', 'no_intl_aid', 'no_admission_data'), 0)
+    left_out = dict.fromkeys(('test_needed', 'aid_unknown', 'no_intl_aid', 'over_budget_with_aid', 'no_admission_data'), 0)
     no_test = ctx['sat'] is None and ctx['act'] is None
     for university in universities:
         cost = international_cost(university)
         if not passes_gate(university, cost, ctx):
             if ctx['scholarship_needed']:
-                left_out['aid_unknown' if aid_status(university) == 'unknown' else 'no_intl_aid'] += 1
+                if affordable_with_aid(university, ctx['budget']) is False:
+                    left_out['over_budget_with_aid'] += 1
+                else:
+                    left_out['aid_unknown' if aid_status(university) == 'unknown' else 'no_intl_aid'] += 1
             continue
         band = admission_chance.chance(university, chance_ctx)['band']
         if band not in admission_chance.STEPS:
@@ -289,7 +342,7 @@ def match_with_context(profile):
         pick = picks[university.pk]
         entries.append({
             'id': university.pk, 'band': band, 'pick': pick, 'status': status, 'cost': cost,
-            'key': sort_key(university, pick, status),
+            'key': sort_key(university, pick, status, ctx['budget']),
         })
     chosen, notes = pick_list(entries)
     notes += left_out_notes(left_out)
@@ -303,6 +356,7 @@ def match_with_context(profile):
             row = serialized[entry['id']]
             row['suggested_programs'] = programs[entry['id']]
             row.update(card_facts(by_pk[entry['id']], entry, ctx))
+            add_aid_budget_note(row['fit'], by_pk[entry['id']], ctx['budget'])
     hints = []
     if not subject_codes:
         hints.append({'code': 'pick_major', 'params': {}, 'text': 'Pick your major for a better list'})
@@ -320,6 +374,39 @@ def match_with_context(profile):
     }, ctx
 
 
+def aid_facts(university):
+    """The official international-aid facts for a card; every number is None when the official site gave none."""
+    availability = university.intl_aid_availability
+    return {
+        'availability': availability if availability in ('yes', 'limited', 'no') else 'unknown',
+        'max_award_usd': university.intl_max_award_usd,
+        'min_student_pays_usd': university.intl_min_student_pays_usd,
+        'merit': university.intl_merit_based, 'need_based': university.intl_need_based,
+        'full_ride': university.intl_full_ride,
+        'source_url': university.financial_aid_url or None,
+        'academic_year': university.aid_academic_year or None,
+        'verified_at': university.aid_verified_at.isoformat() if university.aid_verified_at else None,
+    }
+
+
+def add_aid_budget_note(fit, university, budget):
+    """Put the student's budget against the official minimum cost after aid first in the card's reasons or gaps."""
+    pays = min_student_pays(university)
+    if pays is None or budget is None:
+        return
+    params = {'pays': pays, 'budget': budget}
+    if pays <= budget:
+        text = f'With the largest published aid you would pay at least ${pays:,} a year, within your budget of ${budget:,}'
+        fit['reasons'] = [note_item('aid_fits_budget', text, params), *fit['reasons']][:5]
+    else:
+        text = f'Even with the largest published aid you would pay at least ${pays:,} a year, above your budget of ${budget:,}'
+        fit['gaps'] = [note_item('aid_over_budget', text, params), *fit['gaps']][:4]
+
+
+def note_item(code, text, params):
+    return {'code': code, 'params': params, 'text': text}
+
+
 def card_facts(university, entry, ctx):
     pick, cost = entry['pick'], entry['cost']
     if pick['code'] is None:
@@ -332,7 +419,8 @@ def card_facts(university, entry, ctx):
     return {
         'band': entry['band'], 'subject': subject, 'sat': sat_position(university, ctx['sat'], ctx.get('act')),
         'aid_status': entry['status'], 'cost_usd': cost, 'budget_usd': ctx['budget'],
-        'cost_vs_budget': budget_position(cost, ctx['budget']), 'cost_unknown': cost is None,
+        'cost_vs_budget': budget_position(cost, ctx['budget'], min_student_pays(university)), 'cost_unknown': cost is None,
+        'aid': aid_facts(university),
     }
 
 
