@@ -8,7 +8,7 @@ Code: `backend/apps/admissions/telegram_import/` (`fetch.py`, `official.py`,
 `formatter.py`, `rules.py`, `importer.py`). Tests: `backend/apps/admissions/test_telegram_import.py`.
 
 ## 1. When it runs
-- Only while `core.ai_policy.outbound_ai_allowed()` is true and `AI_GATEWAY_API_KEY` is set.
+- Only while `core.ai_policy.outbound_ai_allowed()` is true and a provider is configured: `AI_GATEWAY_API_KEY` (gateway), or `AI_PROVIDER=claude_cli` (the temporary CLI bridge, via `ai_providers.chat`).
   Otherwise nothing is fetched, sent or added, and the run logs
   `telegram_import_skipped reason=outbound_ai_off|gateway_not_configured`.
 - `TELEGRAM_IMPORT_DAILY_BUDGET=0` turns the import off (`reason=budget_off`).
@@ -141,3 +141,17 @@ so the same program posted in several channels or on several days is added once.
   `False`: hidden until staff approve.
 - Staff approve with the Django admin action "Approve: mark verified and show to students"
   (sets `needs_verification=False`, `is_active=True`) and hide with "Hide from students".
+
+## Provider (Claude CLI or gateway)
+
+The import calls the model through `ai_providers.chat`. `TELEGRAM_IMPORT_AI_PROVIDER` picks the provider for
+the import alone: blank follows `AI_PROVIDER`; `claude_cli` keeps it on the Claude CLI even after the gateway
+key is set and `AI_PROVIDER` is removed (production needs `AI_CLI_ALLOW_PRODUCTION`; startup refuses otherwise).
+
+- The import holds at most one CLI slot, never the last one when `AI_CLI_MAX_CONCURRENT` is above 1, and waits
+  at most `TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS` (default 3) for it. With no slot the run ends as
+  `gateway_unavailable`, the budget unit is refunded and the post waits for the next hourly run.
+- The CLI has no JSON mode. The prompt asks for the JSON object only, the first complete JSON object is cut out
+  of the reply (code fences and surrounding prose are ignored), and an unusable reply gets one follow-up
+  ("return only valid JSON") before the attempt counts as failed (two failed attempts reject the post).
+- Every field is still validated and grounded in code, so the CLI answer is never trusted more than the gateway's.

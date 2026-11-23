@@ -42,12 +42,14 @@ CLI_ENVIRONMENTS = ('development', 'test')
 CLI_BINARY = 'claude'
 
 
-def provider():
-    return settings.AI_PROVIDER
+def provider(override=''):
+    """The provider a call uses: `override` (a per-feature setting; blank follows AI_PROVIDER)."""
+    override = (override or '').strip().lower()
+    return override if override in PROVIDERS else settings.AI_PROVIDER
 
 
-def uses_cli():
-    return provider() == CLAUDE_CLI
+def uses_cli(override=''):
+    return provider(override) == CLAUDE_CLI
 
 
 def cli_allowed():
@@ -66,22 +68,29 @@ def cli_available():
     return _cli_binary() is not None
 
 
-def active_model(gateway_model):
+def active_model(gateway_model, override=''):
     """The model name a call carries: the gateway model, or `claude-cli/<model>` for the CLI."""
-    return f'claude-cli/{settings.AI_TEST_CLI_MODEL}' if uses_cli() else gateway_model
+    return f'claude-cli/{settings.AI_TEST_CLI_MODEL}' if uses_cli(override) else gateway_model
 
 
-def configured():
+def configured(override=''):
     """Whether a real provider can be called (not the outbound switch: callers check that themselves)."""
-    if uses_cli():
+    if uses_cli(override):
         return cli_allowed() and cli_available()
     return bool(settings.AI_GATEWAY_API_KEY)
 
 
-def chat(body, timeout):
-    """Send `body` through the active provider; returns the gateway-shaped payload."""
-    if uses_cli():
-        return _claude_cli(body, timeout)
+def chat(body, timeout, *, override='', slot_wait=None, reserve=0):
+    """Send `body` through the active provider; returns the gateway-shaped payload.
+
+    `override` picks the provider for one feature. A background feature passes `slot_wait` (seconds it
+    may wait for a CLI slot, default AI_CLI_SLOT_WAIT_SECONDS) and `reserve` (CLI slots it must leave
+    free, so it never takes the last one from a student's request).
+    """
+    if uses_cli(override):
+        if slot_wait is None and not reserve:
+            return _claude_cli(body, timeout)
+        return _claude_cli(body, timeout, slot_wait=slot_wait, reserve=reserve)
     return _gateway(body, timeout)
 
 
@@ -114,7 +123,7 @@ SLOT_POLL_SECONDS = 0.25
 
 
 @contextlib.contextmanager
-def _cli_slot():
+def _cli_slot(wait=None, reserve=0):
     """Hold one of AI_CLI_MAX_CONCURRENT machine-wide slots; TimeoutError when none frees up in time.
 
     The slots are lock files: every gunicorn worker and thread on this machine competes for the same
@@ -122,8 +131,11 @@ def _cli_slot():
     """
     folder = os.path.join(tempfile.gettempdir(), 'naseeb-ai-cli-slots')
     os.makedirs(folder, exist_ok=True)
-    count = max(1, settings.AI_CLI_MAX_CONCURRENT)
-    deadline = time.monotonic() + max(0, settings.AI_CLI_SLOT_WAIT_SECONDS)
+    total = max(1, settings.AI_CLI_MAX_CONCURRENT)
+    # A caller that leaves `reserve` slots free only tries the first ones; with a single slot it just waits briefly.
+    count = total - reserve if total - reserve >= 1 else total
+    wait = settings.AI_CLI_SLOT_WAIT_SECONDS if wait is None else wait
+    deadline = time.monotonic() + max(0, wait)
     while True:
         for index in range(count):
             handle = open(os.path.join(folder, f'slot-{index}.lock'), 'w')  # noqa: SIM115 - closed below
@@ -153,7 +165,7 @@ def _cli_environment():
     return env
 
 
-def _claude_cli(body, timeout):
+def _claude_cli(body, timeout, slot_wait=None, reserve=0):
     if not cli_allowed():
         raise RuntimeError(
             'AI_PROVIDER=claude_cli is only allowed when APP_ENV is development or test, '
@@ -169,7 +181,7 @@ def _claude_cli(body, timeout):
     ]
     if system:
         command += ['--system-prompt', system]
-    with _cli_slot():
+    with _cli_slot(slot_wait, reserve):
         try:
             # Own empty working folder: no project memory file or repository is picked up.
             with tempfile.TemporaryDirectory() as workdir:

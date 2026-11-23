@@ -5,6 +5,7 @@ import subprocess
 from unittest import mock
 
 from django.core import checks
+from django.conf import settings
 from django.test import SimpleTestCase, override_settings
 
 from core.checks import ai_provider_check
@@ -201,6 +202,15 @@ class ProductionBridgeTests(SimpleTestCase):
         self.assertEqual(validate_runtime_environment(**common, ai_cli_allow_production=True), [])
         self.assertTrue(validate_runtime_environment(**common))
 
+    def test_startup_checks_the_telegram_import_provider_the_same_way(self):
+        common = dict(app_env='production', debug=False, secret_key='k' * 50, database_url='postgresql://u:p@db/x',
+                      demo_accounts_enabled=False)
+        self.assertTrue(validate_runtime_environment(**common, telegram_import_ai_provider='claude_cli'))
+        self.assertEqual(
+            validate_runtime_environment(**common, telegram_import_ai_provider='claude_cli', ai_cli_allow_production=True), [])
+        self.assertEqual(validate_runtime_environment(**common, telegram_import_ai_provider=''), [])
+        self.assertTrue(validate_runtime_environment(**common, telegram_import_ai_provider='openai'))
+
     @override_settings(**PROD_BRIDGE)
     def test_the_system_check_warns_instead_of_failing(self):
         found = ai_provider_check(None)
@@ -264,6 +274,32 @@ class CliSlotTests(SimpleTestCase):
         threading.Timer(0.3, release.set).start()
         with mock.patch(WHICH, return_value='/bin/claude'), mock.patch(RUN, return_value=completed(cli_output())):
             self.assertIn('choices', ai_providers.chat(BODY, 5))
+
+    @override_settings(AI_CLI_MAX_CONCURRENT=2)
+    def test_a_background_call_leaves_the_last_slot_to_students(self):
+        self.hold_slot()  # one of the two is taken: a background call that reserves one must not take the other
+        with mock.patch(WHICH, return_value='/bin/claude'), mock.patch(RUN) as runner:
+            with self.assertRaises(TimeoutError):
+                ai_providers.chat(BODY, 5, slot_wait=0, reserve=1)
+        runner.assert_not_called()
+
+    @override_settings(AI_CLI_MAX_CONCURRENT=1)
+    def test_a_background_call_gives_up_after_its_own_short_wait(self):
+        import time
+        self.hold_slot()
+        started = time.monotonic()
+        with mock.patch(WHICH, return_value='/bin/claude'), mock.patch(RUN):
+            with self.assertRaises(TimeoutError):
+                ai_providers.chat(BODY, 5, slot_wait=0.3, reserve=1)
+        self.assertLess(time.monotonic() - started, 3)
+
+    @override_settings(AI_PROVIDER='gateway', **{k: v for k, v in CLI.items() if k != 'AI_PROVIDER'})
+    def test_a_feature_can_choose_the_cli_while_the_app_uses_the_gateway(self):
+        with mock.patch(WHICH, return_value='/bin/claude'), mock.patch(RUN, return_value=completed(cli_output())):
+            self.assertIn('choices', ai_providers.chat(BODY, 5, override='claude_cli'))
+        self.assertFalse(ai_providers.uses_cli())
+        self.assertTrue(ai_providers.uses_cli('claude_cli'))
+        self.assertEqual(ai_providers.active_model('m', 'claude_cli'), 'claude-cli/' + settings.AI_TEST_CLI_MODEL)
 
     @override_settings(AI_CLI_MAX_CONCURRENT=1)
     def test_a_failed_call_gives_its_slot_back(self):
