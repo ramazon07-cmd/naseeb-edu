@@ -72,6 +72,21 @@ class ImportOfficialAidTests(APITestCase):
         self.assertEqual(self.uni.aid_sources, ['https://example.ac.uk/aid'])
         self.assertEqual(str(self.uni.aid_verified_at), '2026-11-23')
 
+    def test_a_different_spelling_matches_when_only_one_university_fits(self):
+        mit = University.objects.create(name='Massachusetts Institute of Technology', country='USA')
+        path = write([aid_row('Massachusetts Institute of Technology (MIT)', 'United States', intl_aid_available='yes')])
+        output = run('import_official_aid', path)
+        self.assertIn('0 unmatched', output)
+        mit.refresh_from_db()
+        self.assertEqual(mit.intl_aid_availability, 'yes')
+
+    def test_a_loose_match_never_lands_on_a_university_named_exactly_by_another_row(self):
+        path = write([self.row(intl_aid_available='yes'), aid_row('Example University (EU)', 'United Kingdom', intl_aid_available='no')])
+        output = run('import_official_aid', path)
+        self.assertIn('1 unmatched', output)
+        self.uni.refresh_from_db()
+        self.assertEqual(self.uni.intl_aid_availability, 'yes')
+
     def test_running_twice_changes_nothing(self):
         path = write([self.row(intl_aid_available='yes', currency='USD', max_award=30000, min_student_pays=0)])
         run('import_official_aid', path)
