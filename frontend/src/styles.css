@@ -18292,3 +18292,16 @@ button.cx-search {
 .assistant-compose > .assistant-counter.near {
   color: var(--warning-text, var(--text));
 }
+
+.app-version {
+  display: block;
+  overflow: hidden;
+  margin-top: 1px;
+  font-family: inherit;
+  font-size: var(--text-xs);
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

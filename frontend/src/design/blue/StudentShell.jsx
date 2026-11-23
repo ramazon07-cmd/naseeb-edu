@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, BookOpen, Sparkles, ListChecks, Bell, Brain, CalendarClock, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardCheck, Clock3, Compass, Download, Globe2, GraduationCap, LayoutDashboard, CircleHelp, LifeBuoy, Lock, LogOut, Menu, MessageSquareText, PenLine, School, Search, Settings, ShoppingCart, UsersRound, X } from 'lucide-react';
+import AppVersion from '../../components/AppVersion';
 import { StudentAvatar } from '../../components/records';
 import { exportNodePdf } from '../../lib/exportPdf';
 import { label as roleLabel, fullName, ownStudent } from '../../lib/labels';
@@ -253,7 +254,7 @@ export function StudentShell({ user, data, page, pageMeta, setPage, setQuery, la
           </div>}
           <button type="button" className="nb-account-trigger" aria-haspopup="menu" aria-expanded={profileOpen} aria-label={t('Account menu')} title={t('Account menu')} onClick={() => setProfileOpen(!profileOpen)}>
             <StudentAvatar student={ownStudent(data)} />
-            <span className="nb-account-copy"><b>{user.first_name || fullName(user)}</b><small>{roleLabel(user.role)}</small></span>
+            <span className="nb-account-copy"><b>{user.first_name || fullName(user)}</b><small>{roleLabel(user.role)}</small><AppVersion /></span>
             <ChevronRight size={17} className="nb-account-chevron" aria-hidden="true" />
           </button>
         </div>

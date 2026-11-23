@@ -129,6 +129,10 @@ docker compose up --build
 
 This starts PostgreSQL, Django/Gunicorn and the Nginx-served React frontend at `http://127.0.0.1:3000`. Nginx also proxies `/api` to the backend (the `API_UPSTREAM` build argument), so the app and the API share one origin.
 
+## App version
+
+The version shown in the sidebar account card is read at build time from `frontend/VERSION` (`MAJOR.MINOR.PATCH.BUILD`, for example `2.1.0.0`). The file sits inside `frontend/` so it is available to the Docker build and to a Vercel project rooted at `frontend/`. Bump the last number of `VERSION` in every release PR (minor/major for bigger changes). A malformed value fails the build.
+
 ## Tests
 
 ```bash

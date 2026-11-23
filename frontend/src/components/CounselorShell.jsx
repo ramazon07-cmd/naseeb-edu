@@ -8,6 +8,7 @@ import { counselorCounts } from '../lib/counselorCounts';
 import { canUseAssistant } from '../lib/assistantAccess';
 import { canOpenPage, navigationFor, isPageLocked } from '../lib/routes';
 import { invalidatePagedLists } from '../hooks/usePagedList';
+import AppVersion from './AppVersion';
 import { CounselorUiContext } from './counselorUi';
 import { useAccountPhoto } from './records';
 
@@ -107,7 +108,7 @@ function AccountMenu({ user, variant, theme, language, changeLanguage, logout, o
     ? <button type="button" className="cx-avatar self cx-avatar-button" aria-haspopup="menu" aria-expanded={open} aria-label={t('Account menu')} onClick={() => setOpen(!open)}>{face}</button>
     : <button type="button" className="cx-account-trigger" aria-haspopup="menu" aria-expanded={open} aria-label={t('Account menu')} title={rail ? name : undefined} onClick={() => setOpen(!open)}>
       <span className="cx-avatar self" aria-hidden="true">{face}</span>
-      <span className="cx-account-copy"><b>{name}</b><small>{user.position || t(user.role === 'assistant' ? 'Counselor assistant' : 'School counselor')}</small></span>
+      <span className="cx-account-copy"><b>{name}</b><small>{user.position || t(user.role === 'assistant' ? 'Counselor assistant' : 'School counselor')}</small><AppVersion /></span>
       <ChevronDown size={16} className="cx-account-chevron" aria-hidden="true" />
     </button>;
   return <div className={`cx-account cx-account-${variant}`} ref={ref}>
