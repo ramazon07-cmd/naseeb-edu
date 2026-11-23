@@ -45,6 +45,8 @@ import urllib.request
 
 from django.conf import settings
 
+from . import deadline_io
+
 GATEWAY = 'gateway'
 CLAUDE_CLI = 'claude_cli'
 PROVIDERS = (GATEWAY, CLAUDE_CLI)
@@ -82,23 +84,25 @@ class CliOutputError(ValueError):
     """The claude CLI's output could not be read."""
 
 
-def extract_json(text, required_keys=()):
+def extract_json(text, required_keys=(), required_any=()):
     """The first non-empty JSON object in ``text`` (code fences and prose around it are ignored).
 
     One extractor for every feature: the CLI has no JSON mode, so a reply may come as "Here is the result:"
     plus a fenced object, or mention an empty `{}` first. With ``required_keys`` only an object holding all of
-    them counts. Objects nested inside one already read are not candidates. ValueError when none fits.
+    them counts, and with ``required_any`` one holding at least one of those keys. Objects nested inside one already read are not candidates. ValueError when none fits.
     """
     text = str(text or '')
     decoder = json.JSONDecoder()
     wanted = tuple(required_keys)
+    either = tuple(required_any)
     start = text.find('{')
     while start != -1:
         try:
             value, end = decoder.raw_decode(text, start)
         except ValueError:
             value, end = None, start + 1
-        if isinstance(value, dict) and value and all(key in value for key in wanted):
+        if (isinstance(value, dict) and value and all(key in value for key in wanted)
+                and (not either or any(key in value for key in either))):
             return value
         start = text.find('{', end if isinstance(value, dict) else start + 1)
     raise ValueError('No JSON object in the reply.')
@@ -172,8 +176,19 @@ def _gateway(body, timeout):
         },
         method='POST',
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode('utf-8'))
+    holder = {}
+
+    def call():
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            holder['response'] = response
+            return json.loads(response.read().decode('utf-8'))
+
+    def close():
+        with contextlib.suppress(Exception):
+            holder['response'].close()
+
+    # The socket timeout only limits silence: the whole exchange (headers and body) is cut off at `timeout`.
+    return deadline_io.run_bounded(call, timeout, close)
 
 
 def _split_messages(messages):

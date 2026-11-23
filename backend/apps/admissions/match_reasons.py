@@ -38,7 +38,7 @@ MAX_LINE_CHARS = 240
 MAX_TOKENS = 1400
 NUMBER = re.compile(r'\d[\d,.]*')
 # A personal admission prediction (English, Russian, Uzbek): a chance/odds/probability word together with an
-# admission word, or a flat "you will be admitted". The model may quote the university's admit rate, and words such
+# admission word and a second-person word (you/your, ваш, sizning), or a flat "you will be admitted". The model may quote the university's admit rate, and words such
 # as "opportunities" (imkoniyatlar) or a probability-and-statistics program are fine on their own.
 CHANCE_WORD = re.compile(
     r'chances?\b|odds\b|probabilit|likelihood|\bshans\w*|шанс|вероятн|ehtimol|imkoniyat(?!lar)',
@@ -51,9 +51,17 @@ ADMISSION_WORD = re.compile(
 PREDICTION = re.compile(r'\byou (?:will|would|should) (?:likely |easily |surely )?(?:be )?(?:admitted|accepted|get in)', re.IGNORECASE)
 
 
+PERSONAL = re.compile(
+    r"\byou(?:r|rs|'re|'ll)?\b|\bваш\w*|\bвы\b|\bвас\b|\bтеб\w*|\bsizning\b|\bsiz\w*|\bsening\b|\bsen\b",
+    re.IGNORECASE,
+)
+
+
 def predicts_admission(line):
-    """Whether a line predicts the student's own admission."""
-    return bool((CHANCE_WORD.search(line) and ADMISSION_WORD.search(line)) or PREDICTION.search(line))
+    """Whether a line predicts the student's OWN admission: a chance/odds/probability of admission said about
+    "you", or a flat "you will be admitted". A grounded admit or acceptance rate of the university is fine."""
+    personal_chance = CHANCE_WORD.search(line) and ADMISSION_WORD.search(line) and PERSONAL.search(line)
+    return bool(personal_chance or PREDICTION.search(line))
 
 
 SYSTEM = """You write short "why this fits you" lines for a student's list of universities.

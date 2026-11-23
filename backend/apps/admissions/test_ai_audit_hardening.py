@@ -233,13 +233,15 @@ class MatchReasonGroundingTests(SimpleTestCase):
     def test_a_personal_admission_chance_is_dropped_even_with_a_known_number(self):
         item = {'id': 7, 'admit_rate': 12.0}
         for line in ('Your chance of admission is 12%.', 'The probability that you get in is high.',
-                     'Ваши шансы на поступление высоки.', 'Qabul ehtimoli yuqori.'):
+                     'Ваши шансы на поступление высоки.', 'Sizning qabul ehtimolingiz yuqori.'):
             self.assertEqual(match_reasons.validate({'reasons': {'7': line}}, [item], {})['7'], '', line)
         for line in ('Your odds of getting accepted are good.', 'You will be admitted easily.',
                      'Sizning qabul imkoniyatingiz katta.'):
             self.assertEqual(match_reasons.validate({'reasons': {'7': line}}, [item], {})['7'], '', line)
         kept = 'The university admits about 12% of applicants.'
-        for fine in ("Many opportunities: imkoniyatlar ko'p.", 'Offers a probability and statistics program.',
+        for fine in ('Offers probability and statistics with a 12% admission rate.',
+                     'It accepts about 12% of applicants, a clear reach.',
+                     "Many opportunities: imkoniyatlar ko'p.", 'Offers a probability and statistics program.',
                      'Strong chance to build a research portfolio here.'):
             self.assertEqual(match_reasons.validate({'reasons': {'7': fine}}, [item], {})['7'], fine, fine)
         self.assertEqual(match_reasons.validate({'reasons': {'7': kept}}, [item], {})['7'], kept)
@@ -442,8 +444,10 @@ class TelegramDeadlineTests(TestCase):
         self.assertEqual((len(calls), run.stats.ai_calls), (2, 2))
         key = 'ai-budget:telegram_import:' + timezone.localdate().isoformat()
         self.assertEqual(cache.get(key), 2, 'each provider call took one unit')
-        row = AiUsageLog.objects.get(feature='telegram_import')
-        self.assertEqual((row.status, row.total_tokens, row.input_tokens), ('ok', 220, 200))
+        rows = list(AiUsageLog.objects.filter(feature='telegram_import').order_by('id'))
+        self.assertEqual([(row.status, row.total_tokens, row.extra_attempt) for row in rows],
+                         [('invalid_output', 110, False), ('ok', 110, True)])
+        self.assertEqual(sum(row.input_tokens for row in rows), 200)
 
     def test_running_out_of_time_for_the_repair_stops_the_run_and_keeps_the_paid_unit(self):
         calls = []
@@ -726,15 +730,23 @@ class GatewayDeadlineTests(SimpleTestCase):
 
 
 class BacklogTruncationTests(TestCase):
-    def test_a_long_backlog_keeps_cursor_and_posts_consistent(self):
-        # last_message_id=95; pages gathered 100-1199 and stopped with the cursor at 100.
-        state = TelegramImportChannel.objects.create(channel='examplechannel', last_message_id=95)
+    def pages(self, newest):
+        """A fake channel with ids 1..newest, ten posts a page, newest first (like the preview)."""
+        def fetch_page(channel, before=None):
+            top = newest if before is None else before - 1
+            ids = [pk for pk in range(max(1, top - 9), top + 1)]
+            items = ''.join(
+                f'<div class="tgme_widget_message" data-post="examplechannel/{pk}"><div class="tgme_widget_message_text '
+                f'js-message_text">post {pk}</div><time datetime="2026-11-20T10:00:00+00:00"></time></div>' for pk in ids)
+            return f'<a class="js-messages_more" data-before="{ids[0]}"></a>{items}'
+        return fetch_page
+
+    def test_a_long_backlog_keeps_the_oldest_posts_and_the_cursor(self):
+        TelegramImportChannel.objects.create(channel='examplechannel', last_message_id=95)
         posts = {pk: fetch.Post('examplechannel', pk, f'text {pk}') for pk in range(100, 1200)}
         backlog = fetch.Backlog(found=posts, before=100)
-        calls = []
 
         def fetch_page(channel, before=None):
-            calls.append(before)
             raise importer.StopRun('time_budget')
 
         run = importer.Run(today=TODAY, catalog=importer.rules.Catalog([]), deadline=time.monotonic() + 100,
@@ -742,8 +754,122 @@ class BacklogTruncationTests(TestCase):
         with mock.patch.object(fetch.Backlog, 'load', return_value=backlog):
             with self.assertRaises(importer.StopRun):
                 importer.run_channel(run, 'examplechannel')
-        state.refresh_from_db()
+        state = TelegramImportChannel.objects.get(channel='examplechannel')
         kept = [post['id'] for post in state.backlog_posts]
-        self.assertEqual((len(kept), kept[-1]), (importer.MAX_SAVED_BACKLOG, 1199))
-        # The cursor sits at the oldest kept post, so the dropped posts (100-199) are read again from there.
-        self.assertEqual((kept[0], state.backlog_before), (200, 200))
+        # The posts nearest last_message_id stay, contiguous from the cursor; the cursor is not moved up.
+        self.assertEqual((kept[0], kept[-1], len(kept)), (100, 1099, importer.MAX_SAVED_BACKLOG))
+        self.assertEqual(state.backlog_before, 100)
+
+    @override_settings(TELEGRAM_IMPORT_MAX_POSTS_PER_CHANNEL=1000)
+    def test_every_run_moves_forward_and_no_post_is_skipped(self):
+        state = TelegramImportChannel.objects.create(channel='examplechannel', last_message_id=95)
+        handled = []
+
+        def handle(run, post, st):
+            handled.append(post.id)
+            return ''
+
+        newest = 300
+        positions = []
+        with mock.patch.object(importer, 'MAX_SAVED_BACKLOG', 40), mock.patch.object(importer, 'handle_post', handle):
+            for _ in range(60):
+                state.refresh_from_db()
+                if state.last_message_id >= newest:
+                    break
+                calls = []
+                inner = self.pages(newest)
+
+                def fetch_page(channel, before=None):
+                    calls.append(before)
+                    if len(calls) > 3:  # each run has time for three pages only
+                        raise importer.StopRun('time_budget')
+                    return inner(channel, before)
+
+                run = importer.Run(today=TODAY, catalog=importer.rules.Catalog([]), deadline=time.monotonic() + 100,
+                                   hard_deadline=time.monotonic() + 140, fetch=fetch_page)
+                try:
+                    importer.run_channel(run, 'examplechannel')
+                except importer.StopRun:
+                    pass
+                state.refresh_from_db()
+                positions.append((state.last_message_id, state.backlog_before))
+        self.assertEqual(state.last_message_id, newest, positions)
+        self.assertEqual(sorted(set(handled)), list(range(96, newest + 1)))
+        # Between two runs either the handled cursor went up or the read cursor went down.
+        for (last_a, before_a), (last_b, before_b) in zip(positions, positions[1:]):
+            # (a run right after one that handled posts starts a fresh read: before_a is None)
+            self.assertTrue(last_b > last_a or before_a is None or before_b is None or before_b < before_a, positions)
+
+
+class BoundedCallTests(SimpleTestCase):
+    def test_a_slow_gateway_is_cut_at_the_deadline_even_when_it_trickles(self):
+        class Trickle:
+            closed = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def read(self):
+                time.sleep(2)  # a peer that keeps the exchange alive past the deadline
+                return b'{}'
+
+            def close(self):
+                self.closed = True
+
+        with mock.patch('urllib.request.urlopen', return_value=Trickle()):
+            started = time.monotonic()
+            with self.assertRaises(TimeoutError):
+                ai_providers._gateway(BODY, 0.2)
+        self.assertLess(time.monotonic() - started, 1.0)
+
+    def test_a_gateway_that_never_answers_its_headers_is_cut_too(self):
+        def slow_open(request, timeout=None):
+            time.sleep(2)
+
+        with mock.patch('urllib.request.urlopen', slow_open):
+            started = time.monotonic()
+            with self.assertRaises(TimeoutError):
+                ai_providers._gateway(BODY, 0.2)
+        self.assertLess(time.monotonic() - started, 1.0)
+
+    def test_a_slow_telegram_page_is_cut_at_the_deadline_headers_included(self):
+        opener = mock.Mock()
+        opener.open.side_effect = lambda request, timeout=None: time.sleep(2)
+        with mock.patch.object(fetch, 'build_opener', return_value=opener), mock.patch.object(fetch, 'telegram_ssl_context'):
+            started = time.monotonic()
+            with self.assertRaises(TimeoutError):
+                fetch.fetch_html('examplechannel', deadline=time.monotonic() + 0.2)
+        self.assertLess(time.monotonic() - started, 1.0)
+
+    def test_errors_and_results_pass_through(self):
+        from . import deadline_io
+
+        self.assertEqual(deadline_io.run_bounded(lambda: 5, 1), 5)
+        with self.assertRaises(KeyError):
+            deadline_io.run_bounded(lambda: {}['x'], 1)
+
+
+class CoachRequiredKeysTests(TestCase):
+    def test_a_leading_metadata_object_is_not_taken_for_the_answer(self):
+        from .essay_lab import coach
+
+        content = '{"word_count": 100} then {"scores": {"voice": 2}, "summary": "s"}'
+        payload = {'choices': [{'message': {'content': content}}], 'usage': {}}
+        with mock.patch.object(ai_providers, 'chat', return_value=payload):
+            raw = coach._request_gateway([], 100, time.monotonic() + 60, required_any=('scores', 'safety'))
+        self.assertIn('scores', raw)
+        self.assertEqual(ai_providers.extract_json('{"a": 1} {"safety": "none"}', required_any=('scores', 'safety')),
+                         {'safety': 'none'})
+
+    def test_stage_two_without_notes_is_invalid_output_not_zero_notes(self):
+        from .essay_lab import coach
+
+        spec = mock.Mock(feature='essay_coach', log_id='x')
+        payload = {'choices': [{'message': {'content': 'Result: {"word_count": 100}'}}], 'usage': {'total_tokens': 4}}
+        with mock.patch.object(ai_providers, 'chat', return_value=payload):
+            with self.assertRaises(coach.CoachUnavailable):
+                coach._run_step(spec, mock.Mock(pk=None, school_id=None, role=''), [], 100, lambda raw: raw,
+                                time.monotonic() + 60, lambda: None, required_keys=('notes',))

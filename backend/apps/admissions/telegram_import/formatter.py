@@ -182,6 +182,7 @@ class OutOfTime(Exception):
 
 
 def _call(body, deadline=None):
+    started = time.monotonic()
     try:
         payload = _post(body, deadline)
     except urllib.error.HTTPError as exc:
@@ -192,6 +193,12 @@ def _call(body, deadline=None):
         payload = _post(body, deadline)
     # A repair call shares the sink of the first one: both calls' tokens are kept.
     ai_usage.capture(payload, body, accumulate=True)
+    sink = ai_usage.current_sink()
+    if sink is not None:
+        # This call on its own too, so each provider call gets its own usage row.
+        attempt = {'started': started}
+        ai_usage.capture(payload, body, attempt)
+        sink.setdefault('attempts', []).append(attempt)
     return payload['choices'][0]['message']['content']
 
 

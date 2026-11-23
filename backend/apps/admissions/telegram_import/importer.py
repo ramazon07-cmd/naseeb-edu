@@ -276,10 +276,7 @@ def _format(run, post, text, candidates, page):
         )
     except (formatter.FormatterUnavailable, formatter.GatewayDown, formatter.OutOfTime) as exc:
         settle_budget()
-        ai_usage.record(
-            FEATURE, None, provider=ai_providers.provider(), status=ai_usage.FAILED, sink=sink,
-            refunded=not (sink or {}).get('answered'),
-        )
+        record_attempts(sink, len(reservations), ai_usage.FAILED)
         if isinstance(exc, formatter.GatewayDown):
             logger.warning('telegram_import_gateway_down channel=%s post=%s error=%s', post.channel, post.id, exc)
             raise StopRun('gateway_unavailable') from None
@@ -287,8 +284,22 @@ def _format(run, post, text, candidates, page):
             logger.warning('telegram_import_repair_skipped channel=%s post=%s reason=%s', post.channel, post.id, exc.reason)
             raise StopRun(exc.reason) from None
         raise
-    ai_usage.record(FEATURE, None, provider=ai_providers.provider(), status=ai_usage.OK, sink=sink)
+    record_attempts(sink, len(reservations), ai_usage.OK)
     return result
+
+
+def record_attempts(sink, count, final_status):
+    """One usage row per provider call (one per budget unit taken): the repair call is its own row, marked as an
+    extra attempt of the same post. Every call but the last was unusable; a call that never got an answer was not
+    billed and is recorded as refunded."""
+    attempts = list((sink or {}).get('attempts') or [])
+    for index in range(max(1, count)):
+        part = attempts[index] if index < len(attempts) else {'started': (sink or {}).get('started')}
+        last = index == max(1, count) - 1
+        ai_usage.record(
+            FEATURE, None, provider=ai_providers.provider(), status=final_status if last else ai_usage.FAILED,
+            sink=part, refunded=not part.get('answered'), extra_attempt=index > 0,
+        )
 
 
 def handle_post(run, post, state):
@@ -364,11 +375,12 @@ def run_channel(run, name):
         keep = backlog.dump() if backlog.before else []
         before = backlog.before
         if len(keep) > MAX_SAVED_BACKLOG:
-            # Keep the newest posts and move the cursor down to the oldest one kept: the posts dropped from
-            # the saved list lie below it, so the next run reads those pages again and none is skipped.
+            # Keep the OLDEST posts (the ones nearest the saved last_message_id) and leave the cursor where it
+            # is: the saved range stays contiguous from the cursor up, every run moves the cursor further down,
+            # and once it meets last_message_id those posts are handled first. The newer posts dropped here are
+            # above the new last_message_id then, so the next backlog read finds them again; none is skipped.
             logger.warning('telegram_import_backlog_truncated channel=%s kept=%s', name, MAX_SAVED_BACKLOG)
-            keep = keep[-MAX_SAVED_BACKLOG:]
-            before = keep[0]['id']
+            keep = keep[:MAX_SAVED_BACKLOG]
         state.backlog_before, state.backlog_posts = (before if keep else None), keep
         state.save(update_fields=['backlog_before', 'backlog_posts', 'last_run_at', 'updated_at'])
 

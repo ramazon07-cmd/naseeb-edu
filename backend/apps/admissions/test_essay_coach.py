@@ -807,7 +807,9 @@ class InputHashAndDeadlineTests(CoachApiTestCase):
             type(self.essay).objects.filter(pk=self.essay.pk).update(prompt='Changed while generating.')
             return inner(request, timeout)
 
-        with mock.patch('urllib.request.urlopen', side_effect=urlopen):
+        # The fake writes to the test database, so the bounded call runs inline here (the test DB is per thread).
+        with mock.patch('urllib.request.urlopen', side_effect=urlopen), \
+                mock.patch.object(ai_providers.deadline_io, 'run_bounded', lambda call, seconds, on_timeout=None: call()):
             response = self.client.post(f'{BASE}/essays/{self.essay.pk}/depth-check/', {'base_seq': 0}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(EssayDepthCheck.objects.get().input_hash, before)

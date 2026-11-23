@@ -276,7 +276,9 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
             # The Claude CLI bills nothing per call: an unusable answer gives the allowance back.
             ai_budget.refund(reservation)
         # A gateway answer was billed, so that call stays counted.
-        ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.FAILED)
+        ai_usage.record(
+            FEATURE, user, provider=ai_providers.provider(), status=ai_usage.FAILED, refunded=ai_providers.uses_cli(),
+        )
         raise EducationAIUnavailable()
     ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.OK)
     cache_set(cache_key, result, timeout=CACHE_TTL_SECONDS)

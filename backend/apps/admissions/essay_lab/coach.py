@@ -862,7 +862,7 @@ def _call_timeout(deadline):
     return min(settings.ESSAY_COACH_TIMEOUT_SECONDS, remaining)
 
 
-def _request_gateway(messages, max_tokens, deadline, required_keys=()):
+def _request_gateway(messages, max_tokens, deadline, required_keys=(), required_any=()):
     """One non-streaming JSON-mode call. Pinned model, temperature 0, no fallback model."""
     body = {
         'model': ai_providers.active_model(settings.ESSAY_COACH_MODEL),
@@ -883,7 +883,7 @@ def _request_gateway(messages, max_tokens, deadline, required_keys=()):
         body.pop('reasoning_effort')
         payload = ai_providers.chat(body, _call_timeout(deadline), deadline=deadline)
     ai_usage.capture(payload, body)
-    return ai_providers.extract_json(payload['choices'][0]['message']['content'], required_keys)
+    return ai_providers.extract_json(payload['choices'][0]['message']['content'], required_keys, required_any)
 
 
 def gateway_configured():
@@ -936,7 +936,8 @@ class CheckSpec:
     score_hidden: str = ''
 
 
-def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call, extra_attempt=False, required_keys=()):
+def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call, extra_attempt=False, required_keys=(),
+              required_any=()):
     """One billed call, recorded in ai_usage. Never retried (the only retry is the reasoning_effort 400).
 
     A failure that cost nothing (no CLI slot, a CLI error, a refused gateway request) is recorded as refunded;
@@ -944,7 +945,7 @@ def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call,
     before_call()  # hand the database connection back for the length of the provider call
     ai_usage.begin()
     try:
-        validated = validate(_request_gateway(messages, max_tokens, deadline, required_keys))
+        validated = validate(_request_gateway(messages, max_tokens, deadline, required_keys, required_any))
     except _PROVIDER_ERRORS as exc:
         ai_usage.record(
             spec.feature, user, provider=ai_providers.provider(), status=ai_usage.FAILED,
@@ -1015,6 +1016,8 @@ def run_check(spec, user, before_call=lambda: None):
         # A rubric adds one evidence quote per criterion; a caller's extra keys need room too.
         (SCORED_STEP1_MAX_TOKENS if rubric else STEP1_MAX_TOKENS) + (EXTRA_STEP1_TOKENS if spec.step1_extra else 0),
         validate_step1, deadline, before_call,
+        # The score answer, or a safety answer: a metadata object such as {"word_count": 100} is not one.
+        required_any=('scores', 'safety', 'summary', 'mode'),
     )
     if 'scores' not in step1:
         # Answered instead of a score: the essay's current_danger flag, or the caller's own safety message.
@@ -1046,7 +1049,7 @@ def run_check(spec, user, before_call=lambda: None):
         notes = _run_step(
             spec, user, [system, user_message(instruction)], NOTE_TOKENS * cap + NOTES_BASE_TOKENS,
             lambda raw: validate_notes(raw.get('notes') if isinstance(raw, dict) else None, content, rubric, cap),
-            deadline, before_call, extra_attempt=True,
+            deadline, before_call, extra_attempt=True, required_keys=('notes',),
         )
     result = build_result(step1, notes, rubric=rubric, overall=overall, **extras)
     return finished(result, step1), model

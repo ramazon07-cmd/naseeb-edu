@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from urllib.request import HTTPSHandler, Request, build_opener
 
+from .. import deadline_io
 from ..telegram_feed import MAX_PAGE_BYTES, NoRedirects, telegram_ssl_context
 
 logger = logging.getLogger('naseeb.telegram_import')
@@ -175,21 +176,26 @@ def fetch_html(channel, before=None, deadline=None):
     if stop_at - time.monotonic() <= 0:
         raise TimeoutError('No time left to read the Telegram page.')
     body = bytearray()
-    with opener.open(request, timeout=min(FETCH_TIMEOUT, stop_at - time.monotonic())) as response:
-        while len(body) <= MAX_PAGE_BYTES:
-            if time.monotonic() >= stop_at:
-                raise TimeoutError('The Telegram page took too long to read.')
-            # Best effort: the socket may block for at most the time left, so a silent peer cannot hold the read
-            # past the deadline; read1 returns as soon as some bytes are there.
-            sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
-            if sock is not None:
-                with contextlib.suppress(OSError, ValueError):
-                    sock.settimeout(max(0.05, stop_at - time.monotonic()))
-            reader = getattr(response, 'read1', response.read)
-            chunk = reader(min(READ_CHUNK, MAX_PAGE_BYTES + 1 - len(body)))
-            if not chunk:
-                break
-            body += chunk
+    holder = {}
+
+    def call():
+        with opener.open(request, timeout=min(FETCH_TIMEOUT, stop_at - time.monotonic())) as response:
+            holder['response'] = response
+            while len(body) <= MAX_PAGE_BYTES:
+                if time.monotonic() >= stop_at:
+                    raise TimeoutError('The Telegram page took too long to read.')
+                reader = getattr(response, 'read1', response.read)
+                chunk = reader(min(READ_CHUNK, MAX_PAGE_BYTES + 1 - len(body)))
+                if not chunk:
+                    break
+                body.extend(chunk)
+
+    def close():
+        with contextlib.suppress(Exception):
+            holder['response'].close()
+
+    # Socket timeouts only limit silence; the whole exchange (headers and body) ends at the deadline.
+    deadline_io.run_bounded(call, stop_at - time.monotonic(), close)
     if len(body) > MAX_PAGE_BYTES:
         raise ValueError('Oversized Telegram response')
     return bytes(body).decode('utf-8', 'replace')
