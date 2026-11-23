@@ -4,9 +4,13 @@
 export const MAX_MESSAGE_LENGTH = 2000
 export const HISTORY_LIMIT = 4
 
-export function buildAssistantPayload(messages, language) {
+// History idle for longer than this is not sent again (the server drops it too).
+export const HISTORY_MAX_AGE_MS = 10 * 60 * 1000
+
+export function buildAssistantPayload(messages, language, now = Date.now()) {
   const history = (messages || [])
     .filter((message) => message && !message.local && message.content && (message.role === 'user' || message.role === 'assistant'))
+    .filter((message) => !message.at || now - message.at <= HISTORY_MAX_AGE_MS || message === (messages || [])[(messages || []).length - 1])
     .slice(-HISTORY_LIMIT)
     .map(({ role, content }) => ({ role, content }))
   return { messages: history, language }

@@ -248,7 +248,7 @@ class EndpointTests(Fixture, APITestCase):
             self.chat('Explain the SAT format')
         body = self.sent(urlopen)
         self.assertEqual(body['reasoning_effort'], 'minimal')
-        self.assertEqual(body['max_completion_tokens'], 350)
+        self.assertEqual(body['max_completion_tokens'], 320)
         self.assertEqual(body['model'], 'openai/gpt-5.4-nano')
         self.assertNotIn('providerOptions', body)  # nano is already the fallback model
 
@@ -306,7 +306,7 @@ class EndpointTests(Fixture, APITestCase):
         prompt = self.prompt_for('How do I write a strong personal statement?')
         self.assertNotIn('Context', prompt)
         self.assertNotIn('Harvard', prompt)
-        self.assertLess(len(prompt), 1600)
+        self.assertLess(len(prompt), 3600)  # scope + length rules added
 
     def test_task_question_gets_only_task_context(self):
         prompt = self.prompt_for('Give me an order for my tasks please')

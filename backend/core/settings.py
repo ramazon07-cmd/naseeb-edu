@@ -80,7 +80,7 @@ AI_ASSISTANT_MODEL = config('AI_ASSISTANT_MODEL', default='openai/gpt-5.4-mini')
 AI_ASSISTANT_FALLBACK_MODEL = config('AI_ASSISTANT_FALLBACK_MODEL', default='openai/gpt-5.4-nano').strip()
 AI_ASSISTANT_MAX_MESSAGES = config('AI_ASSISTANT_MAX_MESSAGES', default=12, cast=int)
 AI_ASSISTANT_MAX_INPUT_CHARS = config('AI_ASSISTANT_MAX_INPUT_CHARS', default=6000, cast=int)
-AI_ASSISTANT_MAX_OUTPUT_TOKENS = config('AI_ASSISTANT_MAX_OUTPUT_TOKENS', default=350, cast=int)
+AI_ASSISTANT_MAX_OUTPUT_TOKENS = config('AI_ASSISTANT_MAX_OUTPUT_TOKENS', default=320, cast=int)
 # Cheaper calls: short questions go to the small model; reasoning is kept minimal
 # (empty = do not send reasoning_effort); only the last few messages are resent.
 AI_ASSISTANT_SIMPLE_MODEL = config('AI_ASSISTANT_SIMPLE_MODEL', default='openai/gpt-5.4-nano').strip()
