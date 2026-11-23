@@ -2959,7 +2959,6 @@ export const UI_TRANSLATIONS = {
   "Subject rankings": ["Fanlar bo'yicha reyting", "Рейтинг по предметам"],
   "Subject score": ["Fan bali", "Балл по предмету"],
   "Subject rank": ["Fan bo'yicha o'rin", "Место по предмету"],
-  "{name} score": ["{name} bali", "Балл: {name}"],
   "World {n}": ["Dunyoda {n}", "В мире {n}"],
   "Citations per paper": ["Maqolaga iqtiboslar", "Цитирования на статью"],
   "H-index": ["H-indeks", "Индекс Хирша"],

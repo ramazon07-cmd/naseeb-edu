@@ -50,7 +50,7 @@ test('the QS table switches to the subject rank and subject scores when a subjec
   assert.match(hook, /subject: payload\.subject \?\? null/);
   assert.match(page, /const bySubject = view === 'qs' && subject && search\.subject\?\.code === subject/);
   assert.match(page, /publishedRank\(ranked\.rank, ranked\.label\)/);
-  assert.match(page, /t\('\{name\} score', \{ name: subjectName\(bySubject\.code\) \}\)/);
+  assert.match(page, /t\('Subject score'\)/);
   // The gold "#N Subject" chip is gone from that view; the admissions cards keep it.
   assert.match(page, /bySubject \? world !== '—' && /);
   assert.equal(page.match(/<SubjectRankChip/g).length, 2);
