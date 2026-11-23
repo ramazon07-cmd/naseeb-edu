@@ -1,9 +1,9 @@
 // Small pieces shared by the College Search, university and Applications pages.
-import { CalendarDays, Check, Clock3, HandCoins } from 'lucide-react';
+import { CalendarDays, Check, Clock3, ExternalLink, HandCoins } from 'lucide-react';
 import { formatNumberLocale, t } from '../i18n';
 import { dateText } from '../lib/format';
 import { label } from '../lib/labels';
-import { COLLEGE_AID_FLAGS, PRICE_SCALE_MAX, SAT_SCALE, SCORE_PARTS, bandLabel, daysUntil, dueLabel, dueTone, scalePercent } from '../lib/college';
+import { COLLEGE_AID_FLAGS, PRICE_SCALE_MAX, SAT_SCALE, SCORE_PARTS, bandLabel, daysUntil, dueLabel, dueTone, officialAidLines, scalePercent } from '../lib/college';
 
 // One checkbox/radio row of a filter list, with its live result count.
 export function FilterOption({ type = 'checkbox', name, checked, disabled = false, onChange, count, children }) {
@@ -36,6 +36,17 @@ export function ScoreBreakdown({ breakdown }) {
 
 export function AidTags({ university }) {
   return <div className="tag-row">{COLLEGE_AID_FLAGS.filter(([flag]) => university[flag] && flag !== 'meets_full_need').map(([flag, title]) => <span className="tag" key={flag}>{t(title)}</span>)}{university.meets_full_need && <span className="tag ok"><Check size={12} aria-hidden="true" /> {t("Meets full need")}</span>}{university.test_optional && <span className="tag">{t("Test optional")}</span>}</div>;
+}
+
+// "Aid for international students: Yes/Limited/No/Unknown", "Up to $X/yr", "You'd pay at least $Y/yr" and the official link.
+export function OfficialAidFacts({ aid, showStatus = true }) {
+  const lines = officialAidLines(aid);
+  if (!lines.length) return null;
+  return <div className="official-aid">
+    {showStatus && <p><b>{t("Aid for international students")}:</b> {lines[0].text}</p>}
+    {lines.slice(1).map((line) => <p key={line.key}>{line.text}</p>)}
+    {aid.url && <a className="link-button" href={aid.url} target="_blank" rel="noreferrer">{t("Official source")} <ExternalLink size={13} aria-hidden="true" /></a>}
+  </div>;
 }
 
 export function InfoCard({ title, className = '', children }) {

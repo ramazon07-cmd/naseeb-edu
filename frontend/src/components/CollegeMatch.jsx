@@ -5,8 +5,8 @@ import { useState } from 'react';
 import { ArrowRight, Check, CheckCircle2, Clock3, Compass, GraduationCap, Plus, RefreshCw, Sparkles, X } from 'lucide-react';
 import { api } from '../api';
 import { formatNumberLocale, getLanguage, t, tx } from '../i18n';
-import { TierBand } from './college';
-import { bandLabel, rankText } from '../lib/college';
+import { OfficialAidFacts, TierBand } from './college';
+import { bandLabel, officialAid, rankText } from '../lib/college';
 import { academicStanding, addAllBusy, beginReasons, costText, failReasons, finishReasons, idleReasons, individualAddBusy, matchFootnote, matchMessage, reasonsKey, reasonsView, satPositionText, subjectRankText } from '../lib/collegeMatch';
 import { money } from '../lib/format';
 import { fitReasonText } from '../lib/fitReasons';
@@ -16,6 +16,7 @@ import '../design/pages/college-match-blue.css';
 const ACADEMICS = 'academics';
 const AID_STATUS_LABELS = {
   yes: "Yes",
+  limited: "Limited",
   need_aware: "Need-aware",
   merit: "Merit aid (check it is open to international students)",
   none: "None listed",
@@ -55,6 +56,7 @@ function MatchCard({ university, application, busy, reason, onAdd, onOpen }) {
       <div><dt>{t("Cost per year")}</dt><dd>{money(university.cost_usd)}</dd></div>
       <div><dt>{t("Aid for international students")}</dt><dd>{t(AID_STATUS_LABELS[university.aid_status])}</dd></div>
     </dl>
+    <OfficialAidFacts aid={officialAid(university.aid)} showStatus={false} />
     <div className="nb-match-factors" aria-label={t("What counts here")}>
       <span className="nb-match-factor"><GraduationCap size={13} aria-hidden="true" />{satPositionText(university.sat)}</span>
       <span className={`nb-match-factor${university.cost_vs_budget === 'over' ? ' is-over' : ''}`}>{costText(university)}</span>

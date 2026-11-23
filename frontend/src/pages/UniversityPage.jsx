@@ -6,10 +6,10 @@ import { Empty } from '../components/ui';
 import { QsUniversityDetails } from '../components/QsUniversityDetails';
 import { StrongestSubjects } from '../components/SubjectRank';
 import { institutionStatus } from '../lib/qs';
-import { AidTags, DeadlineCard, InfoCard, PriceMeter, SatRange, ScoreBreakdown, TierBand } from '../components/college';
+import { AidTags, DeadlineCard, OfficialAidFacts, InfoCard, PriceMeter, SatRange, ScoreBreakdown, TierBand } from '../components/college';
 import { dateText, money } from '../lib/format';
 import { initials, label, ownStudent } from '../lib/labels';
-import { afterAidText, daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, percentText, priceInfo, rankText, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
+import { afterAidText, daysUntil, dueLabel, dueTone, eligibleScholarship, essayProgress, matchingPrograms, officialAid, percentText, priceInfo, rankText, satLabel, scalePercent, scholarshipRequirements } from '../lib/college';
 import { fitReasonText } from '../lib/fitReasons';
 
 function FitError({ onRetry }) {
@@ -94,6 +94,7 @@ function UniversityAid({ university, scholarships, student }) {
     </div>
     <div className="stack-16">
       <InfoCard title="Aid deadline"><div className="big-date">{university.scholarship_deadline ? dateText(university.scholarship_deadline) : '—'}</div>{daysUntil(university.scholarship_deadline) != null && <span className={`due ${dueTone(daysUntil(university.scholarship_deadline))}`.trim()}><Clock3 size={12} aria-hidden="true" /> {dueLabel(daysUntil(university.scholarship_deadline))}</span>}</InfoCard>
+      <InfoCard title="Aid for international students"><OfficialAidFacts aid={officialAid(university)} />{university.aid_verified_at && <small className="note">{tx`Checked on ${dateText(university.aid_verified_at)}`}{university.aid_academic_year ? ` · ${university.aid_academic_year}` : ''}</small>}</InfoCard>
       <InfoCard title="Official aid page"><p className="note">{university.aid_application_notes || t("Eligibility is not a final decision; always verify the official requirements.")}</p>{university.financial_aid_url && <a className="button quiet small" href={university.financial_aid_url} target="_blank" rel="noreferrer">{t("Financial aid page")} <ExternalLink size={14} aria-hidden="true" /></a>}</InfoCard>
     </div>
   </div>;

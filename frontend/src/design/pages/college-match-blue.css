@@ -308,3 +308,18 @@
   border: 1px solid var(--nb-late);
   color: var(--nb-late);
 }
+
+.official-aid {
+  display: grid;
+  gap: 2px;
+  font-size: 0.8125rem;
+  margin: 6px 0;
+}
+
+.official-aid p {
+  margin: 0;
+}
+
+.official-aid .link-button {
+  justify-self: start;
+}

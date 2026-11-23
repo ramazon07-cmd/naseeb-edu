@@ -77,6 +77,8 @@ def cards(data, profile):
                 'admit_rate_estimated': fit['chance'].get('admit_rate_estimated'),
                 'cost_usd': row.get('cost_usd'), 'cost_vs_budget': row.get('cost_vs_budget'),
                 'offers_international_aid': row.get('offers_international_aid'),
+                'max_aid_award_usd_per_year': (row.get('aid') or {}).get('max_award_usd'),
+                'min_student_pays_usd_per_year': (row.get('aid') or {}).get('min_student_pays_usd'),
                 'programs': [program['name'] for program in row.get('suggested_programs', [])],
                 'strengths': [clean(item['text']) for item in fit['reasons'][:2]],
                 'watch_outs': [clean(item['text']) for item in fit['gaps'][:2]],

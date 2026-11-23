@@ -30,6 +30,8 @@ const ITEMS = {
   major_check: [{}, 'Check the exact program requirements for your selected major'],
   aid_available: [{}, 'A suitable type of financial aid is available'],
   aid_not_offered: [{}, 'The catalog lists no international, merit or need-based aid at this university'],
+  aid_fits_budget: [{ pays: 1500, budget: 20000 }, 'With the largest published aid you would pay at least US$1,500 a year, within your budget of US$20,000'],
+  aid_over_budget: [{ pays: 30000, budget: 20000 }, 'Even with the largest published aid you would pay at least US$30,000 a year, above your budget of US$20,000'],
   aid_unknown: [{}, 'Financial aid details are not listed in the catalog'],
   credential_foundation: [{}, 'The Uzbek school certificate needs a foundation year here first'],
   credential_one_year: [{}, 'The Uzbek school certificate needs one year of university study first'],

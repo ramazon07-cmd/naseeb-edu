@@ -428,4 +428,5 @@ class ReasonCodeTests(APITestCase):
         source = FIT_REASONS_JS.read_text(encoding='utf-8')
         block = source[source.index('FIT_REASON_TEMPLATES'):]
         translated = set(re.findall(r'^  ([a-z_]+): \{', block, re.MULTILINE))
-        self.assertEqual(translated, FIT_CODES)
+        # Plus the two notes the college match adds itself (college_match.add_aid_budget_note).
+        self.assertEqual(translated, FIT_CODES | {'aid_fits_budget', 'aid_over_budget'})

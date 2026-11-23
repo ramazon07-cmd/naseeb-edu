@@ -1,4 +1,4 @@
-import { t, tp, locale, formatDateLocale, formatNumberLocale } from '../i18n';
+import { t, tp, tx, locale, formatDateLocale, formatNumberLocale } from '../i18n';
 import { InlineLoadError } from '../components/states';
 import { dateText, localDateKey, money } from '../lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -147,6 +147,7 @@ function ProgramRow({ item, closed, due, today, saved, busy, onToggle, onOpen, c
 
 // LinkedIn people search for the program's core name: "Yale Young Global Scholars (YYGS) 2027" -> "Yale Young Global Scholars".
 const programCore = (title) => String(title || '').split(' – ')[0].replace(/\s*\(.*?\)/g, '').replace(/\b20\d\d\b/g, '').replace(/\s+/g, ' ').trim();
+const linkHost = (link) => { try { return new URL(link).hostname.replace(/^www\./, ''); } catch { return link; } };
 const linkedInSearch = (query) => `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(query)}`;
 
 function DetailFact({ icon: Icon, title, children }) {
@@ -164,8 +165,15 @@ function ProgramDetail({ entry, similar, saved, saveBusy, today, onToggle, onBac
   const grades = compactGrades(programGrades(item)).map((grade) => (grade === 'gap' ? t('Gap year') : grade));
   const place = [item.city, item.country].filter(Boolean).join(', ');
   const delivery = item.delivery_mode && item.delivery_mode !== 'unspecified' ? t(DELIVERY_LABELS[item.delivery_mode] || 'To verify') : '';
-  const who = [grades.length ? `${t('Grades')} ${grades.join(', ')}` : '', item.eligible_ages ? `${t('Ages')} ${item.eligible_ages}` : ''].filter(Boolean).join(' · ');
-  const cost = [item.fee_usd != null ? (Number(item.fee_usd) === 0 ? t('Free') : money(item.fee_usd)) : '', item.scholarship_available ? t('Financial aid available') : ''].filter(Boolean).join(' · ');
+  // Open to international students: only said when the official site says so (null = unknown, nothing shown).
+  const openTo = [item.open_to_international === true ? t('Open to international students') : item.open_to_international === false ? t('Not open to international students') : '',
+    item.open_to_uzbekistan === true ? t('Open to students from Uzbekistan') : item.open_to_uzbekistan === false ? t('Not open to students from Uzbekistan') : ''];
+  const who = [grades.length ? `${t('Grades')} ${grades.join(', ')}` : '', item.eligible_ages ? `${t('Ages')} ${item.eligible_ages}` : '', ...openTo].filter(Boolean).join(' · ');
+  const fee = item.fee_usd != null ? (Number(item.fee_usd) === 0 ? t('Free') : money(item.fee_usd)) : '';
+  const cost = [fee, item.fee_text && Number(item.fee_usd) !== 0 && item.fee_text !== fee ? item.fee_text : '', item.scholarship_available ? t('Financial aid available') : ''].filter(Boolean).join(' · ');
+  const dates = item.start_date ? [dateText(item.start_date), item.end_date && item.end_date !== item.start_date ? dateText(item.end_date) : ''].filter(Boolean).join(' – ') : '';
+  const sources = [...new Set([item.source_url, ...(item.official_sources || [])].filter(Boolean))];
+  const verified = !item.needs_verification && Boolean(item.official_verified_at);
   const days = due && !closed ? daysUntil(countdownDay(due, today)) : null;
   const tone = days != null ? dueTone(days) : '';
   const core = programCore(item.title);
@@ -188,14 +196,16 @@ function ProgramDetail({ entry, similar, saved, saveBusy, today, onToggle, onBac
       <div className="nb-pd-main">
         {isUnverifiedTelegramImport(item) && <p className="nb-pd-warn" role="note"><TriangleAlert size={18} aria-hidden="true" /><span><b>{t('From Telegram, not yet verified')}.</b> {t('We added this from a public Telegram channel and have not checked it yet. Confirm the details on the official page before you apply.')}{item.source_url && <> <a href={item.source_url} target="_blank" rel="noreferrer">{t('Original Telegram post')}</a></>}</span></p>}
         {!due?.exact && !closed && <p className="nb-pd-warn" role="note"><TriangleAlert size={18} aria-hidden="true" /><span>{t("We haven't confirmed this year's dates. Check the official site before you apply.")}</span></p>}
-        {item.description && <GlassCard tone="solid" title={t('About the program')} headingLevel="h3"><p className="nb-pd-about">{t(item.description)}</p></GlassCard>}
+        {item.description && <GlassCard tone="solid" title={t('About this program')} headingLevel="h3"><p className="nb-pd-about">{t(item.description)}</p></GlassCard>}
         <div className="nb-pd-facts">
           <DetailFact icon={UsersRound} title={t('Who can apply')}>{who}</DetailFact>
           <DetailFact icon={MapPin} title={t('Format and place')}>{[delivery, place].filter(Boolean).join(' · ')}</DetailFact>
+          <DetailFact icon={CalendarDays} title={t('Program dates')}>{dates}</DetailFact>
           <DetailFact icon={DollarSign} title={t('Cost')}>{cost}</DetailFact>
           <DetailFact icon={HandCoins} title={t('Financial aid')}>{item.aid_details ? t(item.aid_details) : ''}</DetailFact>
           <DetailFact icon={ListChecks} title={t('Requirements')}>{item.requirements ? t(item.requirements) : ''}</DetailFact>
         </div>
+        {verified && sources.length > 0 && <p className="nb-pd-note">{t('Official source')}: {sources.slice(0, 3).map((link, index) => <span key={link}>{index > 0 && ' · '}<a href={link} target="_blank" rel="noreferrer">{linkHost(link)}</a></span>)} · {tx`Checked on ${dateText(item.official_verified_at)}`}</p>}
         <GlassCard tone="solid" title={t('Past participants and winners')} headingLevel="h3">
           <p className="nb-pd-sub">{t('See how past participants and winners describe this program on LinkedIn and what they did next.')}</p>
           <div className="nb-pd-people">{[[t('Participants on LinkedIn'), core], [t('Winners on LinkedIn'), `${core} winner`]].map(([title, query]) => <a key={title} href={linkedInSearch(query)} target="_blank" rel="noreferrer"><span className="nb-pd-in" aria-hidden="true">in</span><span><b>{title}</b><small>“{query}”</small></span><ArrowUpRight size={16} aria-hidden="true" /></a>)}</div>

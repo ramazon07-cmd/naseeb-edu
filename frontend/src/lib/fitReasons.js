@@ -2,7 +2,7 @@ import { formatNumberLocale, t } from '../i18n.js';
 import { fitReasonKey } from '../translations/fitReasons.js';
 import { money } from './format.js';
 
-const MONEY_PARAMS = new Set(['cost', 'budget']);
+const MONEY_PARAMS = new Set(['cost', 'budget', 'pays']);
 
 const paramText = (name, value) => {
   if (MONEY_PARAMS.has(name)) return money(value);
