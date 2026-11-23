@@ -22,7 +22,7 @@ from django.conf import settings
 
 from apps.users.cache_safety import cache_get, cache_set
 
-from . import ai_budget, ai_usage
+from . import ai_budget, ai_providers, ai_usage
 from .assistant import redact_pii
 from .essay_lab import coach
 from .letter_coach import anonymize
@@ -158,17 +158,17 @@ def generate(profile, user, data, version_key, rubric, language='en'):
         raise ReasonsUnavailable('coach_unavailable')
     reservation = ai_budget.consume(FEATURE, user)
     if not reservation:
-        ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.BUDGET_REFUSED)
+        ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
         raise ReasonsUnavailable('coach_resting')
     ai_usage.begin()
     try:
         student = profile_facts(profile, rubric)
         lines = validate(request_lines(student, items, language), items, student)
     except (KeyError, IndexError, TypeError, ValueError, urllib.error.URLError, TimeoutError, OSError):
-        ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.FAILED)
+        ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.FAILED)
         coach.logger.warning('%s_provider_failure user_id=%s', FEATURE, getattr(user, 'pk', None))
         ai_budget.refund(reservation)  # a failed call is free
         raise ReasonsUnavailable('coach_unavailable')
-    ai_usage.record(FEATURE, user, provider='gateway', status=ai_usage.OK)
+    ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.OK)
     cache_set(key, lines, CACHE_SECONDS)
     return lines, False

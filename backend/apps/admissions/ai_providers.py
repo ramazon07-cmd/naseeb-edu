@@ -132,27 +132,55 @@ def _cli_slot(wait=None, reserve=0):
     folder = os.path.join(tempfile.gettempdir(), 'naseeb-ai-cli-slots')
     os.makedirs(folder, exist_ok=True)
     total = max(1, settings.AI_CLI_MAX_CONCURRENT)
-    # A caller that leaves `reserve` slots free only tries the first ones; with a single slot it just waits briefly.
-    count = total - reserve if total - reserve >= 1 else total
+    # A caller with `reserve` takes a slot only while at least that many others stay free (so students are
+    # never starved by background work); with too few slots for that it just waits briefly like everyone else.
+    reserve = reserve if total - reserve >= 1 else 0
     wait = settings.AI_CLI_SLOT_WAIT_SECONDS if wait is None else wait
     deadline = time.monotonic() + max(0, wait)
     while True:
-        for index in range(count):
-            handle = open(os.path.join(folder, f'slot-{index}.lock'), 'w')  # noqa: SIM115 - closed below
-            try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
-                handle.close()
+        for index in range(total):
+            handle = _try_slot(folder, index)
+            if handle is None:
+                continue
+            if reserve and _free_slots(folder, total, skip=index) < reserve:
+                _drop_slot(handle)
                 continue
             try:
                 yield
             finally:
-                fcntl.flock(handle, fcntl.LOCK_UN)
-                handle.close()
+                _drop_slot(handle)
             return
         if time.monotonic() >= deadline:
             raise TimeoutError('Every Claude CLI slot stayed busy; try again shortly.')
         time.sleep(SLOT_POLL_SECONDS)
+
+
+def _try_slot(folder, index):
+    handle = open(os.path.join(folder, f'slot-{index}.lock'), 'w')  # noqa: SIM115 - closed by _drop_slot
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return None
+    return handle
+
+
+def _drop_slot(handle):
+    fcntl.flock(handle, fcntl.LOCK_UN)
+    handle.close()
+
+
+def _free_slots(folder, total, skip):
+    """How many slots other than ``skip`` are free right now (each is probed and released at once; best effort)."""
+    free = 0
+    for index in range(total):
+        if index == skip:
+            continue
+        probe = _try_slot(folder, index)
+        if probe is not None:
+            _drop_slot(probe)
+            free += 1
+    return free
 
 
 def _cli_environment():

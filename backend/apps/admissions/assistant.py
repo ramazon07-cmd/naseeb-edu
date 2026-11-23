@@ -770,7 +770,7 @@ class AssistantChatView(APIView):
                     if usage_sink is not None and use_gateway and usage_sink.get('answered'):
                         ai_budget.add_tokens(user, ai_usage._tokens(usage_sink, response_chars)['total_tokens'])
                     ai_usage.record(
-                        'assistant', user, provider='gateway', sink=usage_sink, output_chars=response_chars,
+                        'assistant', user, provider=ai_providers.provider(), sink=usage_sink, output_chars=response_chars,
                         status=(
                             ai_usage.OK if mode == 'gateway'
                             else ai_usage.BUDGET_REFUSED if mode == 'budget-exhausted'

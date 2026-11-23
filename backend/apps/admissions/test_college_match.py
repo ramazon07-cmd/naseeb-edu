@@ -284,6 +284,12 @@ class ReasonsTests(MatchFixture, APITestCase):
         self.assertIn('Russian', body['messages'][0]['content'])
         self.assertEqual(AiUsageLog.objects.get(feature=match_reasons.FEATURE).status, 'ok')
 
+    @override_settings(AI_PROVIDER='claude_cli', APP_ENV='development')
+    def test_the_usage_row_names_the_provider_that_ran(self):
+        with self.gateway():
+            self.assertEqual(self.client.post(REASONS_URL, {'language': 'en'}, format='json').status_code, 200)
+        self.assertEqual(AiUsageLog.objects.get(feature=match_reasons.FEATURE).provider, 'claude_cli')
+
     def test_the_same_list_is_served_from_the_cache(self):
         with self.gateway() as post:
             first = self.client.post(REASONS_URL).data

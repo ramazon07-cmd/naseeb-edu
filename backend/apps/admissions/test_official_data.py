@@ -44,6 +44,18 @@ class ImportOfficialAidTests(APITestCase):
     def row(self, **values):
         return aid_row('Example University', 'United Kingdom', **values)
 
+    def test_merit_and_need_answers_also_set_the_flags_college_search_filters_on(self):
+        run('import_official_aid', write([self.row(merit_for_intl=True, need_based_for_intl=True)]))
+        self.uni.refresh_from_db()
+        self.assertTrue(self.uni.offers_merit_aid and self.uni.offers_need_based_aid)
+
+    def test_a_no_never_clears_the_college_search_flags(self):
+        University.objects.filter(pk=self.uni.pk).update(offers_merit_aid=True, offers_need_based_aid=True)
+        run('import_official_aid', write([self.row(merit_for_intl=False, need_based_for_intl=False)]))
+        self.uni.refresh_from_db()
+        self.assertTrue(self.uni.offers_merit_aid and self.uni.offers_need_based_aid)
+        self.assertFalse(self.uni.intl_merit_based or self.uni.intl_need_based)
+
     def test_rates_are_fixed_and_unlisted_currencies_are_not_guessed(self):
         self.assertEqual(aid_fx.to_usd(1000, 'GBP'), 1270)
         self.assertEqual(aid_fx.to_usd(1000, 'USD'), 1000)
@@ -195,6 +207,35 @@ class ImportOfficialProgramsTests(APITestCase):
         self.assertFalse(self.program.needs_verification)
         self.assertTrue(self.program.is_active)
         self.assertEqual(self.program.official_sources, ['https://cddrl.example.edu/summerfellows'])
+
+    def test_prose_grades_become_codes_and_the_prose_is_kept_in_requirements(self):
+        self.program.eligible_grades = 'Grades 9\u201312'  # what the last import wrote
+        self.program.save()
+        path = write([self.row(eligible_grades='Grades 9\u201312')])
+        run('import_official_programs', path)
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.eligible_grades, '9,10,11')
+        self.assertEqual(self.program.requirements, 'Eligible grades: Grades 9\u201312\nTwo references')
+        self.assertIn('0 updated, 1 unchanged', run('import_official_programs', path))
+
+    def test_grade_prose_is_parsed_into_the_codes_readers_expect(self):
+        from apps.admissions.management.commands.import_official_programs import grade_codes
+        for prose, codes in (
+            ('Grades 9\u201312', '9,10,11'), ('Grades 9-12', '9,10,11'), ('High school', '9,10,11'),
+            ('Grade 11; entering Grade 12 in fall 2027', '11'), ('Completed high school', 'gap'),
+            ('Grades 5\u20138', '5,6,7,8'), ('Rising Grades 10\u201312', '10,11'), ('Grade 12', '11'),
+            ('Grades 3-7', '5,6,7'), ('Grade 2', ''), ('Current high school students; graduates ineligible', '9,10,11'), ('Gap year or high school graduates', 'gap'),
+            ('Students in grades 9, 10 and 11', '9,10,11'), ('University students', ''), ('', ''), (None, ''),
+        ):
+            with self.subTest(prose=prose):
+                self.assertEqual(grade_codes(prose), codes)
+
+    def test_unparseable_grade_text_leaves_the_stored_value_alone(self):
+        self.program.eligible_grades = '9,10'
+        self.program.save()
+        run('import_official_programs', write([self.row(eligible_grades='Undergraduates only')]))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.eligible_grades, '9,10')
 
     def test_running_twice_changes_nothing(self):
         path = write([self.row()])

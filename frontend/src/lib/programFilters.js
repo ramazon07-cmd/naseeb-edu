@@ -27,6 +27,12 @@ export const toggleGrade = (grade, picked) => {
 // Rows the daily Telegram import added and staff have not checked yet (needs_verification).
 export const isUnverifiedTelegramImport = (item) => Boolean(item?.needs_verification) && item?.source_metadata?.origin === 'telegram';
 
+// Free only when the fee is a real 0; null / undefined / '' mean the fee is unknown (Number(null) is 0).
+export const isFreeProgram = (item) => item?.fee_usd != null && item.fee_usd !== '' && Number(item.fee_usd) === 0;
+
+// The fee text worth showing next to the dollar amount: any fee_text unless the program is free or it repeats the amount.
+export const extraFeeText = (item, shownFee) => (item?.fee_text && !isFreeProgram(item) && item.fee_text !== shownFee ? item.fee_text : '');
+
 export const isClosedProgram = (item, today) => Boolean(item.deadline) && item.deadline < today;
 
 // "6,7,8,9,10,11,gap" -> ['6–11', 'gap']: consecutive grades collapse into a range.
