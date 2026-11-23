@@ -46,3 +46,20 @@ test('instant and cached answers show no source note; budget note is calm', () =
   for (const key of ['local', 'cache', 'gateway']) assert.equal(assistantSource(key).note, '');
   assert.match(assistantSource('budget-exhausted').note, /paused until tomorrow/);
 });
+
+test('history idle for more than 10 minutes is not sent, the new question always is', async () => {
+  const { HISTORY_MAX_AGE_MS } = await import('../src/lib/assistantChat.js');
+  const now = 10_000_000;
+  const old = now - HISTORY_MAX_AGE_MS - 1;
+  const payload = buildAssistantPayload([
+    { id: 'a', role: 'user', content: 'old q', at: old },
+    { id: 'b', role: 'assistant', content: 'old a', at: old },
+    { id: 'c', role: 'user', content: 'new q', at: now },
+  ], 'en', now);
+  assert.deepEqual(payload.messages.map((m) => m.content), ['new q']);
+});
+
+test('closing the panel clears the conversation', () => {
+  const source = readFileSync(new URL('../src/components/AssistantCenter.jsx', import.meta.url), 'utf8');
+  assert.match(source, /function closePanel\(\) \{\s*clearConversation\(\);\s*setOpen\(false\);/);
+});
