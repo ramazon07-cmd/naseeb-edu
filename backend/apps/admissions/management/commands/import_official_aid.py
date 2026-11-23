@@ -7,6 +7,7 @@ reported and never creates a university. A value that is null or "unknown" in th
 the database already has, and running the same file twice changes nothing.
 """
 import json
+import re
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -124,6 +125,22 @@ def same(current, new):
     return current == new
 
 
+COUNTRY_ALIASES = {'usa': 'united states', 'us': 'united states', 'hong kong sar': 'hong kong', 'uk': 'united kingdom'}
+
+
+def loose_key(name, country):
+    """A forgiving key: drops a trailing "(ABBR)", ", <country>", "-<campus>" and "The ", folds punctuation."""
+    name = str(name or '').strip().lower()
+    country = str(country or '').strip().lower()
+    country = COUNTRY_ALIASES.get(country, country)
+    name = re.sub(r'\s*\([^)]*\)\s*$', '', name)
+    name = re.sub(rf',\s*{re.escape(country)}$', '', name)
+    name = re.sub(r'-(ann arbor)$', '', name)
+    name = re.sub(r'^the\s+', '', name)
+    name = re.sub(r'[^a-z0-9]+', ' ', name).strip()
+    return name, country
+
+
 class Command(BaseCommand):
     help = 'Import official-site financial aid data for international undergraduates (idempotent).'
 
@@ -133,10 +150,23 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         index = {}
+        loose = {}
         for university in University.objects.all():
             index[(university.name.strip().lower(), university.country.strip().lower())] = university
+            loose.setdefault(loose_key(university.name, university.country), []).append(university)
         totals = {'rows': 0, 'updated': 0, 'unchanged': 0, 'unmatched': 0, 'no_currency_rate': 0}
         unmatched = []
+        # Universities some row names exactly; a loose match never lands on one of these.
+        exact_names = set()
+        for path in options['files'] or map(str, DEFAULT_FILES):
+            try:
+                for row in json.loads(Path(path).read_text(encoding='utf-8')):
+                    if isinstance(row, dict):
+                        hit = index.get((str(row.get('name') or '').strip().lower(), str(row.get('country') or '').strip().lower()))
+                        if hit:
+                            exact_names.add(hit.pk)
+            except (OSError, ValueError, TypeError):
+                pass
         for path in options['files'] or map(str, DEFAULT_FILES):
             try:
                 rows = json.loads(Path(path).read_text(encoding='utf-8'))
@@ -150,6 +180,11 @@ class Command(BaseCommand):
                 totals['rows'] += 1
                 key = (str(row.get('name') or '').strip().lower(), str(row.get('country') or '').strip().lower())
                 university = index.get(key)
+                if university is None:
+                    # Same university under a slightly different spelling ("... (MIT)", "USA"):
+                    # used only when exactly one row matches.
+                    candidates = loose.get(loose_key(row.get('name'), row.get('country')), [])
+                    university = candidates[0] if len(candidates) == 1 and candidates[0].pk not in exact_names else None
                 if university is None:
                     totals['unmatched'] += 1
                     unmatched.append(f"{row.get('name')} ({row.get('country')}) in {path}")
