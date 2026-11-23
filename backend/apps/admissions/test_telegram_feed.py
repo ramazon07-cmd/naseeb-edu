@@ -74,6 +74,29 @@ class TelegramFeedTests(SimpleTestCase):
         self.assertEqual(parser.ids, {132, 133})
         self.assertEqual(parser.before, 132)
 
+    def test_parser_marks_only_posts_telegram_can_show(self):
+        parser = PublicPostParser()
+        parser.feed('<div data-post="naseeb_edu/214"><a class="tgme_widget_message_photo_wrap 1_2"></a>'
+                    '<div class="tgme_widget_message_text js-message_text">Hi</div></div>'
+                    '<div data-post="naseeb_edu/218"><div class="message_media_not_supported_wrap">'
+                    '<div class="message_media_not_supported"></div></div></div>'
+                    '<div data-post="naseeb_edu/219"><div class="message_media_not_supported"></div>'
+                    '<i class="tgme_widget_message_sticker_wrap"></i></div>')
+        self.assertEqual(parser.ids, {214, 218, 219})
+        self.assertEqual(parser.viewable, {214, 219})
+
+    @patch('apps.admissions.telegram_feed.build_opener')
+    def test_unviewable_posts_are_left_out_but_the_cursor_still_pages(self, opener):
+        html = ('<a data-before="210"></a>'
+                '<div data-post="naseeb_edu/210"><div class="message_media_not_supported"></div></div>'
+                '<div data-post="naseeb_edu/212"><div class="tgme_widget_message_text">x</div></div>'
+                '<div data-post="naseeb_edu/218"><div class="message_media_not_supported"></div></div>')
+        response = opener.return_value.open.return_value.__enter__.return_value
+        response.read.return_value = html.encode()
+        page = fetch_posts()
+        self.assertEqual(page['posts'], ['naseeb_edu/212'])
+        self.assertEqual(page['before'], 210)
+
     @patch('apps.admissions.telegram_feed.fetch_posts')
     def test_cached_latest_and_history_are_separate(self, fetch):
         fetch.return_value = {'channel': 'naseeb_edu', 'posts': ['naseeb_edu/132'], 'before': 132}
@@ -200,8 +223,8 @@ class TelegramFeedTests(SimpleTestCase):
     @patch('apps.admissions.telegram_feed.build_opener')
     def test_history_uses_fixed_host_and_monotonic_cursor(self, opener):
         opener.return_value.open.return_value.__enter__.return_value.read.return_value = (
-            b'<a data-before="150"></a><div data-post="naseeb_edu/132"></div>'
-            b'<div data-post="naseeb_edu/140"></div>')
+            b'<a data-before="150"></a><div data-post="naseeb_edu/132"><p class="tgme_widget_message_text">a</p></div>'
+            b'<div data-post="naseeb_edu/140"><p class="tgme_widget_message_text">b</p></div>')
         result = fetch_posts(140)
         self.assertEqual(result['posts'], ['naseeb_edu/132'])
         self.assertIsNone(result['before'])

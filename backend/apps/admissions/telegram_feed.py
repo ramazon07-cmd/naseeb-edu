@@ -53,17 +53,34 @@ def telegram_ssl_context():
     return context
 
 
+# A post whose block has one of these shows real content in Telegram's embed. Posts with
+# only "message_media_not_supported" (e.g. paid/Stars media, newer post types) render as
+# "Please open Telegram to view this post" for every website, so the panel skips them.
+VIEWABLE_CLASSES = (
+    'tgme_widget_message_text', 'tgme_widget_message_photo', 'tgme_widget_message_video',
+    'tgme_widget_message_roundvideo', 'tgme_widget_message_document', 'tgme_widget_message_poll',
+    'tgme_widget_message_link_preview', 'tgme_widget_message_voice', 'tgme_widget_message_sticker',
+)
+
+
 class PublicPostParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.ids = set()
+        self.viewable = set()
+        self.current = None
         self.before = None
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         post = re.fullmatch(rf'{CHANNEL}/([1-9][0-9]{{0,11}})', attrs.get('data-post', ''))
         if post:
-            self.ids.add(int(post[1]))
+            self.current = int(post[1])
+            self.ids.add(self.current)
+        if self.current is not None:
+            classes = (attrs.get('class') or '').split()
+            if any(name.startswith(VIEWABLE_CLASSES) for name in classes):
+                self.viewable.add(self.current)
         before = attrs.get('data-before', '')
         if re.fullmatch(r'[1-9][0-9]{0,11}', before):
             self.before = int(before)
@@ -90,11 +107,13 @@ def fetch_posts(before=None):
     cursor = parser.before
     if cursor is not None and (not ids or cursor > min(ids) or (before and cursor >= before)):
         cursor = None
-    return {'channel': CHANNEL, 'posts': [f'{CHANNEL}/{post_id}' for post_id in ids], 'before': cursor}
+    # The cursor is worked out from every post on the page; only viewable posts are shown.
+    shown = [post_id for post_id in ids if post_id in parser.viewable]
+    return {'channel': CHANNEL, 'posts': [f'{CHANNEL}/{post_id}' for post_id in shown], 'before': cursor}
 
 
 def page_key(before):
-    return f'telegram-feed:v2:{CHANNEL}:{before or "latest"}'
+    return f'telegram-feed:v3:{CHANNEL}:{before or "latest"}'
 
 
 def newest_post(page):
