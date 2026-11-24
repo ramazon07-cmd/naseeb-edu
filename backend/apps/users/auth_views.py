@@ -4,8 +4,8 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
-from django.db import OperationalError, ProgrammingError
-from django.db.models import Q
+from django.db import OperationalError, ProgrammingError, transaction
+from django.db.models import F, Q
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, Throttled
 from rest_framework.permissions import AllowAny
@@ -14,19 +14,20 @@ from rest_framework.views import APIView
 from apps.users.throttles import (
     LoginAccountCeilingThrottle, LoginAccountThrottle, LoginIPThrottle, RefreshIPThrottle, RefreshTokenThrottle,
 )
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.exceptions import ExpiredTokenError, InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.state import token_backend
 from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .auth_cookies import (
     clear_refresh_cookie, enforce_cookie_csrf, enforce_login_origin, move_refresh_to_cookie, refresh_cookie,
 )
 from .credentials import mark_temporary_credential_used
-from .models import RevokedRefreshSession
+from .models import RefreshRotation, RevokedRefreshSession
 from .localization import localized_message
 from .security import (
-    client_ip, login_locked, note_account_failure, register_login_failure, remember_login_device, reset_login_failures,
+    client_ip, login_locked, security_logger, note_account_failure, register_login_failure, remember_login_device, reset_login_failures,
 )
 
 
@@ -159,20 +160,100 @@ class DemoAwareTokenObtainPairView(TokenObtainPairView):
         return move_refresh_to_cookie(super().post(request, *args, **kwargs))
 
 
+# A grace window never hands out more than this many pairs per rotated token.
+MAX_GRACE_REUSES = 5
+
+
+def _is_expired(exc):
+    return isinstance(exc, ExpiredTokenError) or 'expired' in str(exc).lower()
+
+
 class SafeTokenRefreshSerializer(TokenRefreshSerializer):
-    """Return a normal auth failure when a refresh token's user was deleted."""
+    """Return a normal auth failure when a refresh token's user was deleted.
+
+    Rotation: the presented token is blacklisted and a new one issued. The
+    exchange is recorded (RefreshRotation) so that the same token, presented
+    again within AUTH_REFRESH_REUSE_GRACE_SECONDS (a second tab, a retry after
+    a lost response), gets a fresh pair of the same session instead of a 401.
+
+    `reason` / `info` say why a refresh was refused, for the view's log line."""
+
+    reason = None
+    info = None
+
+    def refuse(self, reason, error, **info):
+        self.reason = reason
+        self.info = info
+        raise error
 
     def validate(self, attrs):
-        sid = RefreshToken(attrs['refresh']).get('sid')
-        if sid and RevokedRefreshSession.objects.filter(sid=sid).exists():
-            raise InvalidToken({'detail': 'This session was signed out.', 'code': 'token_not_valid'})
+        raw = attrs['refresh']
         try:
-            return super().validate(attrs)
+            token = UntypedToken(raw)  # signature and expiry, blacklisted or not
+        except TokenError as exc:
+            self.refuse('expired' if _is_expired(exc) else 'invalid', exc)
+        if token.get('token_type') != 'refresh':
+            self.refuse('invalid', TokenError('Token has wrong type'))
+        sid, jti = token.get('sid'), token.get('jti')
+        if sid and RevokedRefreshSession.objects.filter(sid=sid).exists():
+            self.refuse('revoked_session', InvalidToken({'detail': 'This session was signed out.', 'code': 'token_not_valid'}))
+        try:
+            with transaction.atomic():
+                data = super().validate(attrs)
+                if sid and jti:
+                    RefreshRotation.objects.get_or_create(
+                        old_jti=jti,
+                        defaults={'sid': sid, 'user_id': token.get(api_settings.USER_ID_CLAIM) or 0},
+                    )
+                return data
         except get_user_model().DoesNotExist as exc:
-            raise AuthenticationFailed({
+            self.refuse('no_active_account', AuthenticationFailed({
                 'detail': self.error_messages['no_active_account'],
                 'code': 'no_active_account',
-            }) from exc
+            }), user_missing=True)
+        except AuthenticationFailed:
+            self.reason = 'no_active_account'
+            raise
+        except TokenError as exc:
+            if str(exc) != 'Token is blacklisted':
+                self.refuse('expired' if _is_expired(exc) else 'invalid', exc)
+            pair = self.grace_pair(token, sid, jti)
+            if pair is not None:
+                return pair
+            raise
+
+    def grace_pair(self, token, sid, jti):
+        """A fresh pair for a token rotated moments ago, or None (-> 401)."""
+        self.reason = 'blacklisted'
+        grace = int(getattr(settings, 'AUTH_REFRESH_REUSE_GRACE_SECONDS', 0) or 0)
+        row = RefreshRotation.objects.filter(old_jti=jti).first() if (sid and jti) else None
+        if row is None:
+            self.info = {'rotation_record': False}
+            return None
+        age = (timezone.now() - row.rotated_at).total_seconds()
+        self.info = {'rotation_record': True, 'rotated_seconds_ago': int(age), 'grace_seconds': grace}
+        if grace <= 0 or age > grace or row.sid != sid or row.reuses >= MAX_GRACE_REUSES:
+            return None
+        user = get_user_model().objects.filter(pk=row.user_id).first()
+        if (
+            user is None
+            or not api_settings.USER_AUTHENTICATION_RULE(user)
+            or token.get('pv') != user.password_version
+        ):
+            self.reason = 'no_active_account'
+            return None
+        if RevokedRefreshSession.objects.filter(sid=sid).exists():
+            self.reason = 'revoked_session'
+            return None
+        RefreshRotation.objects.filter(pk=row.pk).update(reuses=F('reuses') + 1)
+        fresh = RefreshToken()
+        for claim, value in token.payload.items():
+            if claim not in {'exp', 'iat', 'jti', 'token_type'}:
+                fresh[claim] = value
+        fresh.outstand()
+        self.reason = 'grace_reuse'
+        security_logger.info('refresh token reused inside the grace window: user=%s rotated_seconds_ago=%d', row.user_id, age)
+        return {'access': str(fresh.access_token), 'refresh': str(fresh)}
 
 
 class SafeTokenRefreshView(TokenRefreshView):
@@ -180,17 +261,38 @@ class SafeTokenRefreshView(TokenRefreshView):
     # Not the per-IP anonymous rate: every tab behind a shared IP refreshes.
     throttle_classes = [RefreshIPThrottle, RefreshTokenThrottle]
 
+    def refusal(self, request, reason, token=None, **info):
+        """One log line per refused refresh: the reason and the user if known.
+        Never the token. The user id is read from the signed token (which can
+        be expired or blacklisted) and is absent for malformed ones."""
+        user_id = None
+        if token:
+            try:
+                user_id = token_backend.decode(token, verify=False).get(api_settings.USER_ID_CLAIM)
+            except Exception:  # malformed: no user to name
+                user_id = None
+        extra = ' '.join(f'{key}={value}' for key, value in info.items())
+        security_logger.warning(
+            'refresh refused: reason=%s user=%s ip=%s ua=%r %s',
+            reason, user_id if user_id is not None else 'unknown', client_ip(request),
+            (request.headers.get('User-Agent') or '')[:80], extra,
+        )
+
     def post(self, request, *args, **kwargs):
         # The token comes only from the HttpOnly cookie; a body field is ignored.
         enforce_cookie_csrf(request)
         token = refresh_cookie(request)
         if not token:
+            self.refusal(request, 'missing_cookie')
             raise InvalidToken({'detail': 'No refresh token cookie.', 'code': 'token_not_valid'})
         serializer = self.get_serializer(data={'refresh': token})
         try:
             serializer.is_valid(raise_exception=True)
-        except TokenError as exc:
-            raise InvalidToken(exc.args[0]) from exc
+        except (TokenError, AuthenticationFailed) as exc:
+            self.refusal(request, serializer.reason or 'invalid', token, **(serializer.info or {}))
+            if isinstance(exc, TokenError):
+                raise InvalidToken(exc.args[0]) from exc
+            raise
         user_id = UntypedToken(token).payload.get(api_settings.USER_ID_CLAIM)
         if user_id is not None:
             note_sign_in(user_id)

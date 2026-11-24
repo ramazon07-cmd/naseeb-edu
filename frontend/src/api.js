@@ -222,7 +222,7 @@ function onSessionEnded(callback) {
   }
 }
 
-const authLock = browserLock(AUTH_LOCK)
+const authLock = browserLock(AUTH_LOCK, () => window.localStorage)
 
 // The refresh and logout calls, authenticated by the HttpOnly cookie.
 const cookieAuth = createCookieAuth({

@@ -218,7 +218,8 @@ ESSAY_AUTOSAVE_LIMIT = config('ESSAY_AUTOSAVE_LIMIT', default=1200, cast=int)
 ESSAY_AUTOSAVE_WINDOW_SECONDS = config('ESSAY_AUTOSAVE_WINDOW_SECONDS', default=600, cast=int)
 SCREEN_TIME_RETENTION_DAYS = config('SCREEN_TIME_RETENTION_DAYS', default=365, cast=int)
 PUBLIC_REACH_MIN_CELL = config('PUBLIC_REACH_MIN_CELL', default=5, cast=int)
-TEMPORARY_CREDENTIAL_TTL_HOURS = config('TEMPORARY_CREDENTIAL_TTL_HOURS', default=72, cast=int)
+# A week: a student who is handed a password on a Friday must still be able to use it on Monday.
+TEMPORARY_CREDENTIAL_TTL_HOURS = config('TEMPORARY_CREDENTIAL_TTL_HOURS', default=168, cast=int)
 # How long a personal student invite stays valid (magic links set their own, 1-7 days).
 STUDENT_INVITE_TTL_DAYS = config('STUDENT_INVITE_TTL_DAYS', default=7, cast=int)
 # Students waiting for confirmation a school may hold; joins pause beyond it.
@@ -596,6 +597,11 @@ SIMPLE_JWT = {
 #     then lose the session on reload, so prefer the proxy.
 # Refresh and logout always require X-Requested-With and an allowed Origin
 # (the API's own, CORS_ALLOWED_ORIGINS[_REGEXES] or CSRF_TRUSTED_ORIGINS).
+# A rotated refresh token presented again within this many seconds gets a fresh
+# pair of the same session instead of a 401 (two tabs, or a retry after a lost
+# response). Replays after the window, and any token of a signed-out session,
+# are refused. 0 turns the grace off. See RefreshRotation.
+AUTH_REFRESH_REUSE_GRACE_SECONDS = config('AUTH_REFRESH_REUSE_GRACE_SECONDS', default=30, cast=int)
 AUTH_REFRESH_COOKIE_NAME = config('AUTH_REFRESH_COOKIE_NAME', default='naseeb_refresh')
 AUTH_REFRESH_COOKIE_PATH = config('AUTH_REFRESH_COOKIE_PATH', default='/api/auth/')
 AUTH_REFRESH_COOKIE_DOMAIN = config('AUTH_REFRESH_COOKIE_DOMAIN', default='').strip() or None

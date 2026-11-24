@@ -11,19 +11,31 @@ const daysSince = (value, now) => value ? Math.floor((now - new Date(value)) / 8
 // Ordered most urgent first; a student can show more than one. "danger" reasons
 // are what makes a student "need you"; a review or a quiet spell is not that.
 // Roadmap missions are not a reason here: the counselor side does not show the roadmap.
+// A temporary password that ran out before the student set their own: they
+// cannot sign in until the counselor reissues one ("Reset login"). A password
+// already changed (must_change_password false) never counts.
+export function passwordExpired(student, now = new Date()) {
+  const detail = student.user_detail;
+  if (!detail || detail.must_change_password === false) return false;
+  if (detail.credential_status === 'expired') return true;
+  return detail.credential_status === 'used' && Boolean(detail.credential_expires_at) && new Date(detail.credential_expires_at) <= now;
+}
+
 export function studentReasons(student, now = new Date()) {
   const reasons = [];
+  if (passwordExpired(student, now)) reasons.push({ key: 'password_expired', tone: 'warning' });
   if (student.tasks_overdue > 0) reasons.push({ key: 'late_task', tone: 'danger', countPattern: '{n} late task|{n} late tasks', count: student.tasks_overdue });
   if (student.documents_missing > 0) reasons.push({ key: 'missing_document', tone: 'danger', count: student.documents_missing, title: student.documents_missing === 1 ? student.missing_document_title : '' });
   if (student.to_review_total > 0) reasons.push({ key: 'to_review', tone: 'warning', countPattern: '{n} to review|{n} to review', count: student.to_review_total });
   const quietDays = daysSince(student.user_detail?.last_login, now);
   if (quietDays !== null && quietDays >= QUIET_DAYS) reasons.push({ key: 'quiet', tone: 'muted', quietDays });
-  if (student.not_started && !reasons.length) reasons.push({ key: 'not_started', tone: 'muted', expired: student.user_detail?.credential_status === 'expired' });
+  if (student.not_started && !reasons.length) reasons.push({ key: 'not_started', tone: 'muted', expired: false });
   return reasons;
 }
 
 export const needsAttention = (reasons) => reasons.some((reason) => reason.tone === 'danger');
 export const isQuiet = (reasons) => reasons.some((reason) => reason.key === 'quiet');
+export const isPasswordExpired = (reasons) => reasons.some((reason) => reason.key === 'password_expired');
 export const isNotStarted = (reasons) => reasons.some((reason) => reason.key === 'not_started');
 export const isOnTrack = (reasons) => reasons.length === 0;
 

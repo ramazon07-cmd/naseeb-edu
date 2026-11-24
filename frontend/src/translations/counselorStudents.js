@@ -3,6 +3,8 @@
 export const COUNSELOR_STUDENTS_TRANSLATIONS = {
   'Not started yet': ['Hali boshlamagan', 'Ещё не начал'],
   'Password expired': ['Parol muddati tugagan', 'Срок пароля истёк'],
+  'Temporary password expired — reissue': ['Vaqtinchalik parol muddati tugagan — qayta bering', 'Временный пароль истёк — выдайте заново'],
+  'They cannot sign in. Use Reset login to give them a new temporary password.': ['U kira olmaydi. Yangi vaqtinchalik parol berish uchun «Login parolini yangilash» tugmasini bosing.', 'Ученик не может войти. Нажмите «Сбросить пароль», чтобы выдать новый временный пароль.'],
   'Has not signed in or been given work yet': ['Hali kirmagan yoki unga ish berilmagan', 'Ещё не входил и не получал заданий'],
   'Select all on this page': ['Shu sahifadagilarning hammasini tanlash', 'Выбрать всех на этой странице'],
   '{n} student selected|{n} students selected': ['{n} ta o‘quvchi tanlandi', 'Выбран {n} ученик|Выбрано {n} ученика|Выбрано {n} учеников'],

@@ -317,9 +317,9 @@ class SharedAddressAuthThrottleTests(APITestCase):
 
     def test_refresh_is_limited_per_token(self):
         token = refresh_cookie_value(self.login('pupil0'))
-        with rates(refresh='2/hour'):
+        with rates(refresh='2/hour'), override_settings(AUTH_REFRESH_REUSE_GRACE_SECONDS=0):
             codes = [post_refresh(self.client, token).status_code for _ in range(3)]
-        # The second use fails because the token was rotated; the third is throttled.
+        # The second use fails because the token was rotated (no grace here); the third is throttled.
         self.assertEqual(codes, [200, 401, 429])
 
     def change_password(self, password):

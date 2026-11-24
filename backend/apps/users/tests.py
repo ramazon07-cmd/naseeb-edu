@@ -1,7 +1,7 @@
 from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -265,7 +265,8 @@ class TemporaryCredentialLifecycleTests(APITestCase):
         refresh = refresh_cookie_value(login)
         first = post_refresh(self.client, refresh)
         self.assertEqual(first.status_code, status.HTTP_200_OK)
-        replay = post_refresh(self.client, refresh)
+        with override_settings(AUTH_REFRESH_REUSE_GRACE_SECONDS=0):
+            replay = post_refresh(self.client, refresh)
         self.assertEqual(replay.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_refresh_token_for_deleted_user_returns_401_not_500(self):
