@@ -203,10 +203,17 @@ class SafeTokenRefreshSerializer(TokenRefreshSerializer):
             with transaction.atomic():
                 data = super().validate(attrs)
                 if sid and jti:
-                    RefreshRotation.objects.get_or_create(
+                    _, created = RefreshRotation.objects.get_or_create(
                         old_jti=jti,
                         defaults={'sid': sid, 'user_id': token.get(api_settings.USER_ID_CLAIM) or 0},
                     )
+                    if not created and not RefreshRotation.objects.filter(
+                        old_jti=jti, reuses__lt=MAX_GRACE_REUSES,
+                    ).update(reuses=F('reuses') + 1):
+                        # Another worker rotated this token between our blacklist
+                        # check and now: that issuance counts against the cap,
+                        # and is refused (and rolled back) once the cap is spent.
+                        raise TokenError('Token is blacklisted')
                 return data
         except get_user_model().DoesNotExist as exc:
             self.refuse('no_active_account', AuthenticationFailed({

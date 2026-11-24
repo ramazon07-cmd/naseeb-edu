@@ -268,7 +268,8 @@ export function storageLock(name, storage, {
     target().removeItem(probe)
   } catch { return null }
   const read = () => { try { return target()?.getItem(key) ?? null } catch { return null } }
-  const write = (value) => { try { target()?.setItem(key, value) } catch { /* blocked */ } }
+  // false when the write failed (quota filled after the probe, storage blocked).
+  const write = (value) => { try { target()?.setItem(key, value); return true } catch { return false } }
   const holder = (value) => {
     if (!value) return null
     const [owner, expires] = value.split('|')
@@ -281,7 +282,7 @@ export function storageLock(name, storage, {
     while (!held && now() < deadline) {
       const current = holder(read())
       if (!current || current.expires <= now()) {
-        write(`${me}|${now() + leaseMs}`)
+        if (!write(`${me}|${now() + leaseMs}`)) break // cannot hold a lease: carry on without one
         await sleep(settleMs)
         held = holder(read())?.owner === me
       } else {

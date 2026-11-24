@@ -587,3 +587,20 @@ test('storageLock reports no lock at once when storage refuses writes, so caller
   assert.equal(storageLock('t', () => { throw new Error('blocked'); }), null);
   assert.equal(storageLock('t', null), null);
 });
+
+test('storageLock stops waiting when the lease write fails after a good probe', async () => {
+  const map = new Map();
+  let probing = true;
+  const storage = {
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    removeItem: (k) => map.delete(k),
+    setItem: (k, v) => {
+      if (k.endsWith(':probe')) { map.set(k, v); return; }
+      if (!probing) throw new Error('QuotaExceededError');
+    },
+  };
+  const lock = storageLock('t', storage, { sleep: async () => { throw new Error('must not wait'); } });
+  assert.equal(typeof lock, 'function', 'the probe passed');
+  probing = false;
+  assert.equal(await lock(async () => 'ran without a lock'), 'ran without a lock');
+});

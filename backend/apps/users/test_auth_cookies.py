@@ -384,6 +384,26 @@ class RefreshGraceConcurrencyAndLogForgeryTests(TransactionTestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(RefreshRotation.objects.get(old_jti=jti).reuses, MAX_GRACE_REUSES)
 
+    def test_a_double_initial_rotation_counts_against_the_cap(self):
+        # Two workers both passed the blacklist check before either rotated:
+        # simulate the second one by skipping the check for one request.
+        from unittest import mock
+
+        from apps.users.auth_views import MAX_GRACE_REUSES
+
+        jti = UntypedToken(self.original)['jti']
+        issued = 1  # setUp's rotation
+        with mock.patch.object(RefreshToken, 'check_blacklist', lambda self: None):
+            issued += post_refresh(APIClient(), self.original).status_code == 200
+            self.assertEqual(RefreshRotation.objects.get(old_jti=jti).reuses, 1)
+            # While racing, the cap is enforced on the initial path too.
+            issued += post_refresh(APIClient(), self.original).status_code == 200
+            late = post_refresh(APIClient(), self.original).status_code
+        self.assertEqual(late, 401)
+        issued += post_refresh(APIClient(), self.original).status_code == 200  # grace path: cap already spent
+        self.assertEqual(issued, 1 + MAX_GRACE_REUSES)
+        self.assertEqual(RefreshRotation.objects.get(old_jti=jti).reuses, MAX_GRACE_REUSES)
+
     def test_forged_user_id_never_reaches_the_log(self):
         import jwt as pyjwt
 
