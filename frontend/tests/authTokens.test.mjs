@@ -580,3 +580,10 @@ test('two tabs sending the same cookie both succeed when the server has a reuse 
   assert.deepEqual(sent, ['r0', 'r0']);
   assert.notEqual(storage.getItem(SESSION_HINT_KEY), null, 'nobody was signed out');
 });
+
+test('storageLock reports no lock at once when storage refuses writes, so callers use jitter', () => {
+  const broken = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError') }, removeItem: () => {} };
+  assert.equal(storageLock('t', broken), null);
+  assert.equal(storageLock('t', () => { throw new Error('blocked'); }), null);
+  assert.equal(storageLock('t', null), null);
+});

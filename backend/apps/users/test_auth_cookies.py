@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.test import override_settings
 from rest_framework import status
+from django.test import TransactionTestCase
 from rest_framework.test import APIClient, APITestCase
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
@@ -256,6 +257,7 @@ class RefreshReuseGraceTests(APITestCase):
         from apps.users.auth_views import MAX_GRACE_REUSES
         codes = [post_refresh(self.tab(), self.original).status_code for _ in range(MAX_GRACE_REUSES + 1)]
         self.assertEqual(codes, [200] * MAX_GRACE_REUSES + [401])
+        self.assertEqual(MAX_GRACE_REUSES, 2)
 
     def test_inactive_user_gets_no_grace_pair(self):
         post_refresh(self.tab(), self.original)
@@ -333,3 +335,72 @@ class ExpiredTemporaryPasswordMessageTests(APITestCase):
         )
         self.assertIn('консультанта', localized_message('credential_expired', language='ru'))
         self.assertIn('Maslahatchingizdan', localized_message('credential_expired', language='uz'))
+
+
+class RefreshGraceConcurrencyAndLogForgeryTests(TransactionTestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            username='conc-user', email='conc@example.com', password=PASSWORD, role=User.Role.COUNSELOR,
+            school=School.objects.create(name='Conc School', code='conc-school'),
+        )
+        login = APIClient().post('/api/auth/token/', {'username': 'conc-user', 'password': PASSWORD}, format='json')
+        self.original = refresh_cookie_value(login)
+        post_refresh(APIClient(), self.original)
+
+    def test_concurrent_grace_requests_never_exceed_the_cap(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        from django.db import connection
+
+        from apps.users.auth_views import MAX_GRACE_REUSES
+
+        def attempt(_):
+            try:
+                return post_refresh(APIClient(), self.original).status_code
+            except Exception:  # SQLite table locks under threads; only grants matter here
+                return 0
+            finally:
+                connection.close()
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            codes = list(pool.map(attempt, range(6)))
+        self.assertLessEqual(codes.count(200), MAX_GRACE_REUSES, codes)
+        self.assertLessEqual(RefreshRotation.objects.get(old_jti=UntypedToken(self.original)['jti']).reuses, MAX_GRACE_REUSES)
+
+    def test_a_stale_read_cannot_claim_a_slot_past_the_cap(self):
+        from unittest import mock
+
+        from apps.users.auth_views import MAX_GRACE_REUSES
+
+        jti = UntypedToken(self.original)['jti']
+        RefreshRotation.objects.filter(old_jti=jti).update(reuses=MAX_GRACE_REUSES)
+        real = RefreshRotation.objects.filter(old_jti=jti).first()
+        real.reuses = 0  # what a concurrent request would have read before the other one wrote
+        with mock.patch('apps.users.auth_views.RefreshRotation.objects') as manager:
+            manager.filter.return_value.first.return_value = real
+            manager.filter.return_value.update = RefreshRotation.objects.filter(old_jti=jti).update
+            response = post_refresh(APIClient(), self.original)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(RefreshRotation.objects.get(old_jti=jti).reuses, MAX_GRACE_REUSES)
+
+    def test_forged_user_id_never_reaches_the_log(self):
+        import jwt as pyjwt
+
+        forged = pyjwt.encode(
+            {'token_type': 'refresh', 'user_id': '1\nWARNING fake line', 'jti': 'x', 'exp': 4102444800},
+            'not-the-server-key', algorithm='HS256',
+        )
+        with self.assertLogs('naseeb.security', level='WARNING') as captured:
+            post_refresh(APIClient(), forged, HTTP_USER_AGENT='evil\nINJECTED')
+        text = '\n'.join(captured.output)
+        self.assertIn('user=unknown', text)
+        self.assertNotIn('fake line', text)
+        self.assertEqual(len(text.splitlines()), 1)
+
+    def test_expired_but_validly_signed_token_names_the_user(self):
+        expired = RefreshToken.for_user(self.user)
+        expired.set_exp(from_time=timezone.now() - timedelta(days=30), lifetime=timedelta(days=1))
+        with self.assertLogs('naseeb.security', level='WARNING') as captured:
+            post_refresh(APIClient(), str(expired))
+        self.assertIn(f'user={self.user.pk}', captured.output[0])

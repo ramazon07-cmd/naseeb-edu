@@ -1,4 +1,6 @@
 import uuid
+
+import jwt
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -161,7 +163,7 @@ class DemoAwareTokenObtainPairView(TokenObtainPairView):
 
 
 # A grace window never hands out more than this many pairs per rotated token.
-MAX_GRACE_REUSES = 5
+MAX_GRACE_REUSES = 2
 
 
 def _is_expired(exc):
@@ -245,15 +247,33 @@ class SafeTokenRefreshSerializer(TokenRefreshSerializer):
         if RevokedRefreshSession.objects.filter(sid=sid).exists():
             self.reason = 'revoked_session'
             return None
-        RefreshRotation.objects.filter(pk=row.pk).update(reuses=F('reuses') + 1)
-        fresh = RefreshToken()
-        for claim, value in token.payload.items():
-            if claim not in {'exp', 'iat', 'jti', 'token_type'}:
-                fresh[claim] = value
-        fresh.outstand()
+        with transaction.atomic():
+            # Claim a slot atomically: concurrent requests cannot both pass the cap.
+            claimed = RefreshRotation.objects.filter(pk=row.pk, reuses__lt=MAX_GRACE_REUSES).update(reuses=F('reuses') + 1)
+            if claimed != 1:
+                return None
+            fresh = RefreshToken()
+            for claim, value in token.payload.items():
+                if claim not in {'exp', 'iat', 'jti', 'token_type'}:
+                    fresh[claim] = value
+            fresh.outstand()
         self.reason = 'grace_reuse'
         security_logger.info('refresh token reused inside the grace window: user=%s rotated_seconds_ago=%d', row.user_id, age)
         return {'access': str(fresh.access_token), 'refresh': str(fresh)}
+
+
+def signed_user_id(token):
+    """The user id of a token whose signature is valid (an expired one is fine),
+    as an int; None for anything forged, malformed or non-numeric, so a log line
+    can never carry attacker-chosen text."""
+    try:
+        payload = jwt.decode(
+            token, token_backend.get_verifying_key(token), algorithms=[token_backend.algorithm],
+            options={'verify_exp': False, 'verify_aud': False},
+        )
+        return int(payload.get(api_settings.USER_ID_CLAIM))
+    except Exception:
+        return None
 
 
 class SafeTokenRefreshView(TokenRefreshView):
@@ -265,15 +285,10 @@ class SafeTokenRefreshView(TokenRefreshView):
         """One log line per refused refresh: the reason and the user if known.
         Never the token. The user id is read from the signed token (which can
         be expired or blacklisted) and is absent for malformed ones."""
-        user_id = None
-        if token:
-            try:
-                user_id = token_backend.decode(token, verify=False).get(api_settings.USER_ID_CLAIM)
-            except Exception:  # malformed: no user to name
-                user_id = None
+        user_id = signed_user_id(token) if token else None
         extra = ' '.join(f'{key}={value}' for key, value in info.items())
         security_logger.warning(
-            'refresh refused: reason=%s user=%s ip=%s ua=%r %s',
+            'refresh refused: reason=%s user=%s ip=%r ua=%r %s',
             reason, user_id if user_id is not None else 'unknown', client_ip(request),
             (request.headers.get('User-Agent') or '')[:80], extra,
         )

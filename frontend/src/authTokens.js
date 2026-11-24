@@ -260,6 +260,13 @@ export function storageLock(name, storage, {
   const key = `naseeb-lock:${name}`
   const target = () => safeStorage(storage)
   if (!target()) return null
+  // Storage that exists but refuses writes (quota, private mode) cannot hold a
+  // lease: report "no lock" so the caller falls back to jitter at once.
+  try {
+    const probe = `${key}:probe`
+    target().setItem(probe, '1')
+    target().removeItem(probe)
+  } catch { return null }
   const read = () => { try { return target()?.getItem(key) ?? null } catch { return null } }
   const write = (value) => { try { target()?.setItem(key, value) } catch { /* blocked */ } }
   const holder = (value) => {
