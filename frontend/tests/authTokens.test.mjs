@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SESSION_HINT_KEY, STALE_TOKEN_KEYS, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
-  migrateLegacyTokens,
+  migrateLegacyTokens, storageLock,
 } from '../src/authTokens.js';
 
 function memoryStorage(initial = {}) {
@@ -206,9 +206,41 @@ test('a rejected refresh ends the session when no other tab refreshed', async ()
   let calls = 0;
   const refresh = createRefresher({ store, expired, failed, sleep: noSleep, send: async () => { calls += 1; return { ok: false, status: 401, payload: null }; } });
   await assert.rejects(refresh('a0'), (error) => error.message === 'expired' && error.status === 401);
-  assert.equal(calls, 1, 'no retry: nobody rotated the cookie');
+  assert.equal(calls, 2, 'one patient retry, then the session ends');
   assert.equal(store.get('access'), null);
   assert.equal(storage.getItem(SESSION_HINT_KEY), null);
+});
+
+test('a 401 is retried once after a pause and the session survives when the retry works', async () => {
+  const { storage, store } = signedIn();
+  const delays = [];
+  let calls = 0;
+  const refresh = createRefresher({
+    store, expired, failed, sleep: (ms) => { delays.push(ms); return Promise.resolve(); }, retryDelayMs: 1500,
+    send: async () => { calls += 1; return calls === 1 ? { ok: false, status: 401, payload: null } : { ok: true, status: 200, payload: { access: 'a1' } }; },
+  });
+  assert.equal(await refresh('a0'), 'a1');
+  assert.equal(calls, 2);
+  assert.ok(delays.includes(1500));
+  assert.notEqual(storage.getItem(SESSION_HINT_KEY), null);
+});
+
+test('the retry is skipped when the tab signs out meanwhile, and for 403', async () => {
+  const { store } = signedIn();
+  let calls = 0;
+  let refresh;
+  refresh = createRefresher({
+    store, expired, failed, retryDelayMs: 1500,
+    sleep: async () => { store.endHere(); },
+    send: async () => { calls += 1; return { ok: false, status: 401, payload: null }; },
+  });
+  await assert.rejects(refresh('a0'), (error) => error.status === 401);
+  assert.equal(calls, 1);
+  const other = signedIn();
+  let forbidden = 0;
+  const refresh403 = createRefresher({ store: other.store, expired, failed, sleep: noSleep, warn: () => {}, send: async () => { forbidden += 1; return { ok: false, status: 403, payload: null }; } });
+  await assert.rejects(refresh403('a0'), (error) => error.status === 401);
+  assert.equal(forbidden, 1);
 });
 
 test('a 403 (CSRF/Origin check) from refresh signs out and warns instead of retrying forever', async () => {
@@ -471,4 +503,104 @@ test('a legacy token is revoked through the logout endpoint, in the body, with t
   assert.equal(options.headers['Content-Type'], 'application/json');
   assert.deepEqual(JSON.parse(options.body), { refresh: 'old-r' });
   await assert.rejects(createCookieAuth({ apiUrl: '/api', request: mockFetch([{ status: 403 }]).request }).revokeLegacy('x'));
+});
+
+// --- localStorage lock (no Web Locks) ----------------------------------------
+
+test('storageLock lets one tab at a time through, across tabs sharing storage', async () => {
+  const storage = memoryStorage();
+  const lockA = storageLock('t', storage, { settleMs: 5, pollMs: 5 });
+  const lockB = storageLock('t', storage, { settleMs: 5, pollMs: 5 });
+  let inside = 0;
+  let overlap = false;
+  const order = [];
+  const job = (name) => async () => {
+    inside += 1;
+    if (inside > 1) overlap = true;
+    order.push(`${name}-in`);
+    await tick(25);
+    order.push(`${name}-out`);
+    inside -= 1;
+    return name;
+  };
+  const results = await Promise.all([lockA(job('a')), lockB(job('b')), lockA(job('c'))]);
+  assert.deepEqual(results, ['a', 'b', 'c']);
+  assert.equal(overlap, false);
+  assert.equal(storage.map.size, 0, 'the lease is released');
+});
+
+test('storageLock frees an abandoned lease and never hangs a waiter forever', async () => {
+  let clock = 1_000;
+  const storage = memoryStorage({ 'naseeb-lock:t': 'dead|1500' });
+  const lock = storageLock('t', storage, { now: () => clock, sleep: async (ms) => { clock += ms; }, settleMs: 5, pollMs: 100, leaseMs: 500, waitMs: 5000 });
+  assert.equal(await lock(async () => 'ran'), 'ran', 'expired lease taken over');
+  const stuck = memoryStorage({ 'naseeb-lock:t': 'dead|9999999' });
+  let tickMs = 0;
+  const waiter = storageLock('t', stuck, { now: () => tickMs, sleep: async (ms) => { tickMs += ms; }, settleMs: 5, pollMs: 100, waitMs: 1000 });
+  assert.equal(await waiter(async () => 'ran anyway'), 'ran anyway');
+  assert.equal(stuck.getItem('naseeb-lock:t'), 'dead|9999999', 'a lease it never held is left alone');
+});
+
+test('without Web Locks, two tabs behind the storage lock refresh in turn and both stay signed in', async () => {
+  const storage = memoryStorage({ [SESSION_HINT_KEY]: 'k.1' });
+  const server = cookieServer();
+  const hub = channelHub();
+  const tabs = Array.from({ length: 3 }, () => {
+    const store = createSessionStore(storage);
+    return createRefresher({
+      store, expired, failed, send: server.send, share: hub(store),
+      lock: storageLock('refresh', storage, { settleMs: 5, pollMs: 5 }),
+    });
+  });
+  const results = await Promise.all(tabs.map((refresh) => refresh()));
+  assert.deepEqual(server.sent, ['r0'], 'one rotation for three tabs');
+  assert.deepEqual(results, ['a1', 'a1', 'a1']);
+});
+
+test('two tabs sending the same cookie both succeed when the server has a reuse grace window', async () => {
+  const storage = memoryStorage();
+  const jar = { cookie: 'r0' };
+  let n = 0;
+  const sent = [];
+  // Like the backend: a cookie rotated moments ago still gets a fresh pair.
+  const send = async () => {
+    sent.push(jar.cookie);
+    n += 1;
+    await tick(10);
+    jar.cookie = `r${n}`;
+    return { ok: true, status: 200, payload: { access: `a${n}` } };
+  };
+  const tabA = signedIn('a0', storage);
+  const tabB = { store: createSessionStore(storage) };
+  tabB.store.adopt('a0');
+  const refreshA = createRefresher({ store: tabA.store, expired, failed, send });
+  const refreshB = createRefresher({ store: tabB.store, expired, failed, send, settleMs: 30 });
+  const results = await Promise.all([refreshA('a0'), refreshB('a0')]);
+  assert.equal(results.length, 2);
+  assert.deepEqual(sent, ['r0', 'r0']);
+  assert.notEqual(storage.getItem(SESSION_HINT_KEY), null, 'nobody was signed out');
+});
+
+test('storageLock reports no lock at once when storage refuses writes, so callers use jitter', () => {
+  const broken = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError') }, removeItem: () => {} };
+  assert.equal(storageLock('t', broken), null);
+  assert.equal(storageLock('t', () => { throw new Error('blocked'); }), null);
+  assert.equal(storageLock('t', null), null);
+});
+
+test('storageLock stops waiting when the lease write fails after a good probe', async () => {
+  const map = new Map();
+  let probing = true;
+  const storage = {
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    removeItem: (k) => map.delete(k),
+    setItem: (k, v) => {
+      if (k.endsWith(':probe')) { map.set(k, v); return; }
+      if (!probing) throw new Error('QuotaExceededError');
+    },
+  };
+  const lock = storageLock('t', storage, { sleep: async () => { throw new Error('must not wait'); } });
+  assert.equal(typeof lock, 'function', 'the probe passed');
+  probing = false;
+  assert.equal(await lock(async () => 'ran without a lock'), 'ran without a lock');
 });

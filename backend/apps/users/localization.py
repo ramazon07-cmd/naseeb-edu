@@ -4,9 +4,9 @@ SUPPORTED_LANGUAGES = {'uz', 'ru', 'en'}
 
 MESSAGES = {
     'credential_expired': {
-        'uz': 'Vaqtinchalik parol muddati tugagan. Administrator yangi parol berishi kerak.',
-        'ru': 'Срок действия временного пароля истёк. Администратор должен выдать новый пароль.',
-        'en': 'The temporary password has expired. An administrator must issue a new one.',
+        'uz': 'Vaqtinchalik parol muddati tugagan. Maslahatchingizdan yangi parol so‘rang.',
+        'ru': 'Срок действия временного пароля истёк. Попросите у своего консультанта новый пароль.',
+        'en': 'Your temporary password has expired. Ask your counselor for a new one.',
     },
     'credential_used': {
         'uz': 'Bu vaqtinchalik parol allaqachon ishlatilgan. Administrator yangi parol berishi kerak.',

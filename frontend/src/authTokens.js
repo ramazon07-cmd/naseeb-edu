@@ -135,6 +135,11 @@ export function isSignOutSignal(event) {
  *     dropped: no token, no counter. (The server revokes the whole chain on
  *     logout, so the cookie it set is dead too.)
  *
+ * A 401 that survives all of that gets one more try after `retryDelayMs`
+ * (the server also accepts a just-rotated cookie for a few seconds, and a
+ * request can lose to a restart or a slow worker) before the session is
+ * ended; 403 and a signed-out tab never retry.
+ *
  * `send()` must resolve to `{ ok, status, payload }` (the cookie goes along).
  * 400/401/403 end the session: `store.clear()` and throw `expired(401, payload)`
  * (403 means the request failed the CSRF/Origin check, which a retry cannot
@@ -146,7 +151,7 @@ export function isSignOutSignal(event) {
 export function createRefresher({
   store, send, expired, failed = expired, lock = null, jitterMs = 0, random = Math.random,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  share = () => {}, settleMs = 400, handoffMs = 60, warn = () => {},
+  share = () => {}, settleMs = 400, handoffMs = 60, retryDelayMs = 1500, warn = () => {},
 }) {
   let inflight = null
 
@@ -167,6 +172,7 @@ export function createRefresher({
     const first = await attempt(epoch)
     if (first.access) return first.access
     let { result } = first
+    let retried = false
     if (![400, 401, 403].includes(result.status)) throw failed(result.status || 0, result.payload)
     // Did another tab rotate the cookie while ours was in flight? Its response
     // can land a moment after our 401, so look again before giving up.
@@ -182,8 +188,24 @@ export function createRefresher({
       const second = await attempt(epoch)
       if (second.access) return second.access
       result = second.result
+      retried = true
     }
     if (store.epoch() !== epoch) throw expired(401, null)
+    if (!retried && result.status !== 403 && retryDelayMs > 0 && store.generation() !== null) {
+      // One patient retry before signing out: never for 403, never once the
+      // session was ended elsewhere (the counter is gone).
+      await sleep(retryDelayMs)
+      if (store.epoch() !== epoch) throw expired(401, null)
+      const adopted = newer(baseline)
+      if (adopted) return adopted
+      if (store.generation() !== null) {
+        const third = await attempt(epoch)
+        if (third.access) return third.access
+        result = third.result
+        if (![400, 401, 403].includes(result.status)) throw failed(result.status || 0, result.payload)
+        if (store.epoch() !== epoch) throw expired(401, null)
+      }
+    }
     if (result.status === 403) warn('Session refresh was rejected (403): check CORS_ALLOWED_ORIGINS / CSRF_TRUSTED_ORIGINS.', result.payload)
     store.clear()
     throw expired(401, result.payload)
@@ -225,10 +247,62 @@ export function createRefresher({
   return refresh
 }
 
-// Web Locks when the browser has them (shared by every tab of this origin).
-export function browserLock(name) {
+// A lock shared by the tabs of this origin through localStorage, for browsers
+// without the Web Locks API (plain-http LAN, older Safari). A lease, not a
+// guarantee: whoever writes the key last, and still reads their own id after
+// a short settle, holds it. A crashed holder's lease runs out (`leaseMs`), and
+// a waiter that gives up after `waitMs` carries on without exclusivity (a late
+// refresh is better than none; the server tolerates the overlap).
+export function storageLock(name, storage, {
+  now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), random = Math.random,
+  leaseMs = 15000, waitMs = 10000, pollMs = 40, settleMs = 30,
+} = {}) {
+  const key = `naseeb-lock:${name}`
+  const target = () => safeStorage(storage)
+  if (!target()) return null
+  // Storage that exists but refuses writes (quota, private mode) cannot hold a
+  // lease: report "no lock" so the caller falls back to jitter at once.
+  try {
+    const probe = `${key}:probe`
+    target().setItem(probe, '1')
+    target().removeItem(probe)
+  } catch { return null }
+  const read = () => { try { return target()?.getItem(key) ?? null } catch { return null } }
+  // false when the write failed (quota filled after the probe, storage blocked).
+  const write = (value) => { try { target()?.setItem(key, value); return true } catch { return false } }
+  const holder = (value) => {
+    if (!value) return null
+    const [owner, expires] = value.split('|')
+    return { owner, expires: Number(expires) || 0 }
+  }
+  return async (fn) => {
+    const me = `${Math.floor(random() * 36 ** 8).toString(36)}${Math.floor(random() * 36 ** 8).toString(36)}`
+    const deadline = now() + waitMs
+    let held = false
+    while (!held && now() < deadline) {
+      const current = holder(read())
+      if (!current || current.expires <= now()) {
+        if (!write(`${me}|${now() + leaseMs}`)) break // cannot hold a lease: carry on without one
+        await sleep(settleMs)
+        held = holder(read())?.owner === me
+      } else {
+        await sleep(pollMs + Math.floor(random() * pollMs))
+      }
+    }
+    try {
+      return await fn()
+    } finally {
+      if (held && holder(read())?.owner === me) { try { target()?.removeItem(key) } catch { /* blocked */ } }
+    }
+  }
+}
+
+// Web Locks when the browser has them (shared by every tab of this origin),
+// otherwise the localStorage lease above (when `storage` is given).
+export function browserLock(name, storage = null) {
   const locks = typeof navigator !== 'undefined' ? navigator.locks : null
-  return locks?.request ? (fn) => locks.request(name, fn) : null
+  if (locks?.request) return (fn) => locks.request(name, fn)
+  return storage ? storageLock(name, storage) : null
 }
 
 /**

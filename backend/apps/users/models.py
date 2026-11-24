@@ -410,3 +410,23 @@ class RevokedRefreshSession(models.Model):
 
     def __str__(self):
         return f'session {self.sid}'
+
+
+class RefreshRotation(models.Model):
+    """A refresh token that was exchanged for a newer one, kept for a few seconds.
+
+    Two tabs (or a retry after a lost response) can present the same cookie
+    within moments of each other; the second would hit the blacklist and sign
+    the user out. Inside REFRESH_REUSE_GRACE_SECONDS the second request gets a
+    fresh pair of the same session instead. No token is stored here, only the
+    id of the old one. After the window the old token is dead for good. Rows
+    are tiny and purged by flush_expired_tokens."""
+
+    old_jti = models.CharField(max_length=64, unique=True)
+    sid = models.CharField(max_length=64, db_index=True)
+    user_id = models.BigIntegerField()
+    rotated_at = models.DateTimeField(db_index=True, default=timezone.now)
+    reuses = models.PositiveSmallIntegerField(default=0)
+
+    def __str__(self):
+        return f'rotation of {self.old_jti} (session {self.sid})'

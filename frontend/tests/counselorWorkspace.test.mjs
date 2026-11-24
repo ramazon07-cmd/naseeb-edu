@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 globalThis.window ??= { localStorage: { getItem: () => null, setItem() {} }, navigator: { language: 'en' }, location: { search: '' } };
 const { setLanguage } = await import('../src/i18n.js');
 const { counselorCounts, liveReloadKeys, reviewCounts, statsBadges, unreadConversations, unreadMessages } = await import('../src/lib/counselorCounts.js');
-const { studentReasons, needsAttention, isOnTrack, isQuiet, isNotStarted, urgency } = await import('../src/lib/studentReasons.js');
+const { studentReasons, needsAttention, isOnTrack, isQuiet, isNotStarted, isPasswordExpired, passwordExpired, urgency } = await import('../src/lib/studentReasons.js');
 const { mergeReviewQueue, REVIEW_SOURCES } = await import('../src/lib/reviewQueue.js');
 const { meetingsThisWeek } = await import('../src/lib/meetings.js');
 const { activityText } = await import('../src/lib/activityText.js');
@@ -91,8 +91,6 @@ test('a student who has not started is neither on track nor urgent', () => {
   const fresh = studentReasons({ not_started: true, user_detail: { credential_status: 'issued' } }, now);
   assert.ok(isNotStarted(fresh) && !isOnTrack(fresh) && !needsAttention(fresh));
   assert.equal(urgency(fresh), 0);
-  assert.equal(fresh[0].expired, false);
-  assert.equal(studentReasons({ not_started: true, user_detail: { credential_status: 'expired' } }, now)[0].expired, true);
   // Any other reason wins; a started student is on track again.
   assert.ok(!isNotStarted(studentReasons({ not_started: true, tasks_overdue: 1 }, now)));
   assert.ok(isOnTrack(studentReasons({ not_started: false }, now)));
@@ -191,4 +189,16 @@ test('roadmap templates stay locked for counselors and hidden from admins', () =
   }
   assert.deepEqual(resolveRoute(parsePath('/counselor-roadmap'), counselor), { page: 'dashboard', params: {} });
   assert.deepEqual(resolveRoute(parsePath('/counselor-roadmap'), admin), { page: 'admin_dashboard', params: {} });
+});
+
+test('an expired temporary password is flagged for reissue, whatever else is going on', () => {
+  const stuck = studentReasons({ not_started: true, user_detail: { credential_status: 'expired', must_change_password: true } }, now);
+  assert.ok(isPasswordExpired(stuck));
+  assert.ok(isPasswordExpired(studentReasons({ tasks_overdue: 2, user_detail: { credential_status: 'expired', must_change_password: true } }, now)));
+  // Signed in once with it, never set their own, and it has since run out.
+  assert.ok(passwordExpired({ user_detail: { credential_status: 'used', must_change_password: true, credential_expires_at: '2026-01-01T00:00:00Z' } }, now));
+  // A password that was changed, a live credential, or no data never reads as expired.
+  assert.ok(!passwordExpired({ user_detail: { credential_status: 'expired', must_change_password: false } }, now));
+  assert.ok(!passwordExpired({ user_detail: { credential_status: 'issued', must_change_password: true } }, now));
+  assert.ok(!passwordExpired({}, now));
 });

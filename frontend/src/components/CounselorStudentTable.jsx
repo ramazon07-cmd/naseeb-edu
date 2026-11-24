@@ -3,14 +3,15 @@ import { t, tx } from '../i18n';
 import { CxAvatar, CxTag, ReasonTags } from './counselorUi';
 import { gradeText } from '../lib/format';
 import { splitList } from '../lib/profileSections';
-import { isNotStarted, isQuiet, needsAttention } from '../lib/studentReasons';
+import { isNotStarted, isPasswordExpired, isQuiet, needsAttention } from '../lib/studentReasons';
 import '../pages/counselor-students.css';
 
 export function StatusTag({ reasons }) {
+  if (isPasswordExpired(reasons)) return <span title={t("They cannot sign in. Use Reset login to give them a new temporary password.")}><CxTag tone="late">{t("Temporary password expired — reissue")}</CxTag></span>;
   if (needsAttention(reasons)) return <CxTag tone="late">{t("Needs you")}</CxTag>;
   if (reasons.some((reason) => reason.key === 'to_review')) return <CxTag tone="warn">{t("To review")}</CxTag>;
   if (isQuiet(reasons)) return <CxTag tone="quiet">{t("Quiet")}</CxTag>;
-  if (isNotStarted(reasons)) return <span title={t("Has not signed in or been given work yet")}><CxTag tone="pending">{reasons.find((reason) => reason.key === 'not_started').expired ? t("Password expired") : t("Not started yet")}</CxTag></span>;
+  if (isNotStarted(reasons)) return <span title={t("Has not signed in or been given work yet")}><CxTag tone="pending">{t("Not started yet")}</CxTag></span>;
   return <CxTag tone="ok">{t("On track")}</CxTag>;
 }
 
