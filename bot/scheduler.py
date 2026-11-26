@@ -208,16 +208,25 @@ async def deliver_student_messages(*, bot, api, limiter, sleep=asyncio.sleep, un
 # The backend picks what is due and locks each job, so a restart or two instances
 # during a deploy never run one twice.
 REMINDER_MINUTE = 5
+RETRY_SECONDS = 180
 
 
 class HourlyJob:
-    """Starts `job` at most once per UTC hour, at or after `minute`, in the background."""
+    """Starts `job` at most once per UTC hour, at or after `minute`, in the background.
 
-    def __init__(self, job, minute=REMINDER_MINUTE, clock=time.time):
+    A run that ends (done, or refused by the backend with a 4xx) uses up the hour. A run the
+    backend could not be reached for (a deploy, a restart) is tried again every `retry_seconds`
+    within the same hour, so one deploy no longer costs the whole hour.
+    """
+
+    def __init__(self, job, minute=REMINDER_MINUTE, clock=time.time, retry_seconds=RETRY_SECONDS):
         self._job = job
         self._minute = minute
         self._clock = clock
+        self._retry_seconds = retry_seconds
         self._last_hour = None
+        self._retry_hour = None
+        self._retry_at = 0
         self.task = None
 
     def maybe_start(self):
@@ -225,17 +234,23 @@ class HourlyJob:
         hour, minute = int(now // 3600), int(now % 3600 // 60)
         if minute < self._minute or hour == self._last_hour or (self.task and not self.task.done()):
             return None
-        # One try per hour: a missed hour is harmless, reminders look a whole day ahead.
-        self._last_hour = hour
-        self.task = asyncio.create_task(self._run())
+        if hour == self._retry_hour and now < self._retry_at:
+            return None
+        self.task = asyncio.create_task(self._run(hour))
         return self.task
 
-    async def _run(self):
+    async def _run(self, hour):
         try:
             await self._job()
-        except (ApiError, ApiUnavailable) as exc:
+            self._last_hour = hour
+        except ApiUnavailable as exc:
+            self._retry_hour, self._retry_at = hour, self._clock() + self._retry_seconds
+            log.warning('scheduled jobs were not run (%s), trying again in %d s', type(exc).__name__, self._retry_seconds)
+        except ApiError as exc:
+            self._last_hour = hour  # a refusal would repeat: do not hammer the backend
             log.warning('scheduled jobs were not run this hour: %s', type(exc).__name__)
         except Exception:
+            self._last_hour = hour
             log.exception('unexpected error while running scheduled jobs')
 
 

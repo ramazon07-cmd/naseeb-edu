@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SESSION_HINT_KEY, STALE_TOKEN_KEYS, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
+  accessExpiresSoon, SESSION_HINT_KEY, STALE_TOKEN_KEYS, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
   migrateLegacyTokens, storageLock,
 } from '../src/authTokens.js';
 
@@ -603,4 +603,27 @@ test('storageLock stops waiting when the lease write fails after a good probe', 
   assert.equal(typeof lock, 'function', 'the probe passed');
   probing = false;
   assert.equal(await lock(async () => 'ran without a lock'), 'ran without a lock');
+});
+
+const jwt = (exp) => `h.${Buffer.from(JSON.stringify({ exp })).toString('base64url')}.s`;
+
+test('accessExpiresSoon looks at the exp claim with a skew', () => {
+  const now = 1_000_000_000_000;
+  assert.equal(accessExpiresSoon(jwt(now / 1000 + 600), now), false);
+  assert.equal(accessExpiresSoon(jwt(now / 1000 + 30), now), true);
+  assert.equal(accessExpiresSoon(jwt(now / 1000 - 5), now), true);
+  assert.equal(accessExpiresSoon('opaque-token', now), false);
+  assert.equal(accessExpiresSoon(null, now), false);
+});
+
+test('parallel callers with one stale token share a single refresh request', async () => {
+  const { store } = signedIn('a0');
+  let sends = 0;
+  const refresh = createRefresher({
+    store, expired, failed, sleep: noSleep,
+    send: async () => { sends += 1; await tick(5); return { ok: true, status: 200, payload: { access: 'a1' } }; },
+  });
+  const results = await Promise.all(Array.from({ length: 10 }, () => refresh('a0')));
+  assert.deepEqual(results, Array(10).fill('a1'));
+  assert.equal(sends, 1);
 });

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from bot.api import ApiUnavailable
+from bot.api import ApiError, ApiUnavailable
 from bot.scheduler import HourlyJob
 
 HOUR = 3600
@@ -40,19 +40,44 @@ async def test_runs_once_an_hour_from_minute_five():
     assert len(calls) == 2
 
 
-async def test_a_backend_error_is_logged_and_waits_for_the_next_hour(caplog):
+async def test_an_unreachable_backend_is_retried_within_the_hour(caplog):
     calls = []
 
     async def remind():
         calls.append(1)
-        raise ApiUnavailable('timeout')
+        if len(calls) < 3:
+            raise ApiUnavailable('timeout')
 
     clock = Clock(10 * HOUR + 6 * 60)
-    job = HourlyJob(remind, clock=clock)
+    job = HourlyJob(remind, clock=clock, retry_seconds=180)
     with caplog.at_level(logging.WARNING):
         assert await finished(job)
     assert 'scheduled jobs were not run' in caplog.text
     clock.at += 60
+    assert not await finished(job)  # too soon
+    clock.at += 130
+    assert await finished(job)  # second failure
+    clock.at += 200
+    assert await finished(job)  # succeeds
+    clock.at += 200
+    assert not await finished(job)  # the hour is used up
+    assert len(calls) == 3
+    clock.at = 11 * HOUR + 6 * 60
+    assert await finished(job)
+
+
+async def test_a_backend_refusal_is_not_retried(caplog):
+    calls = []
+
+    async def remind():
+        calls.append(1)
+        raise ApiError(403)
+
+    clock = Clock(10 * HOUR + 6 * 60)
+    job = HourlyJob(remind, clock=clock, retry_seconds=1)
+    with caplog.at_level(logging.WARNING):
+        assert await finished(job)
+    clock.at += 600
     assert not await finished(job)
     assert calls == [1]
 

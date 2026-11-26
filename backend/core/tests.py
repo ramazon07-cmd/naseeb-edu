@@ -433,3 +433,23 @@ class PublicSiteUrlTests(SimpleTestCase):
     def test_system_check_allows_localhost_outside_production(self):
         from core.checks import public_site_url_check
         self.assertEqual(public_site_url_check(None), [])
+
+
+class ProbePathTests(SimpleTestCase):
+    PROBES = (
+        '/', '/api-auth/login/', '/api-auth/logout/', '/api/v1/', '/api/v2/', '/schema/',
+        '/settings/settings.py', '/api/v1/auto_login', '/api/credentials',
+    )
+
+    def test_probe_paths_get_a_bare_404_and_no_log_line(self):
+        for path in self.PROBES:
+            with self.subTest(path=path), self.assertNoLogs('django.request', level='WARNING'):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.content, b'')
+
+    def test_real_routes_and_real_404s_are_untouched(self):
+        self.assertEqual(self.client.get('/api/health/').status_code, 200)
+        with self.assertLogs('django.request', level='WARNING') as logs:
+            self.assertEqual(self.client.get('/api/users/nothing-here/').status_code, 404)
+        self.assertIn('/api/users/nothing-here/', logs.output[0])

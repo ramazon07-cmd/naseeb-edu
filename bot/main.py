@@ -4,6 +4,7 @@ import logging
 import re
 import signal
 import sys
+import time
 from contextlib import suppress
 
 import aiohttp
@@ -23,6 +24,8 @@ from .scheduler import RateLimiter, run_scheduler
 
 log = logging.getLogger('bot')
 ALLOWED_UPDATES = ['message', 'callback_query', 'my_chat_member']
+POLLING_TIMEOUT = 10  # seconds Telegram holds a getUpdates open; also how long a stopped instance still blocks the next one
+CONFLICT_GRACE = 60.0  # seconds after start in which a getUpdates conflict is the old instance still shutting down
 TOKEN_PATTERN = re.compile(r'\d{6,}:[A-Za-z0-9_-]{20,}')
 
 
@@ -40,6 +43,45 @@ class RedactingFormatter(logging.Formatter):
         return text
 
 
+class StartupConflictFilter(logging.Filter):
+    """On a deploy the old instance polls for a moment longer: aiogram logs that as an error every few seconds.
+
+    Within `grace` seconds of start the first conflict becomes one info line and the retries are dropped; after
+    that (a second instance really is running) everything is logged as usual.
+    """
+
+    def __init__(self, grace=CONFLICT_GRACE, clock=time.monotonic):
+        super().__init__()
+        self._grace = grace
+        self._clock = clock
+        self._started = clock()
+        self._reported = False
+
+    def filter(self, record):
+        if self._clock() - self._started > self._grace:
+            return True
+        message = record.getMessage()
+        if 'TelegramConflictError' in message:
+            if self._reported:
+                return False
+            self._reported = True
+            record.levelno, record.levelname = logging.INFO, 'INFO'
+            record.msg, record.args = 'another instance is still polling (a deploy overlap); retrying quietly: %s', (message,)
+            return True
+        if self._reported and message.startswith('Sleep for '):
+            return False
+        return True
+
+
+async def wait_for_old_instance(stop, delay):
+    """Give the previous instance time to stop polling; returns early when asked to stop."""
+    if delay <= 0:
+        return
+    log.info('waiting %.0f s for a previous instance to stop polling', delay)
+    with suppress(asyncio.TimeoutError):
+        await asyncio.wait_for(stop.wait(), timeout=delay)
+
+
 def setup_logging(config):
     handler = logging.StreamHandler()
     handler.setFormatter(RedactingFormatter(
@@ -47,6 +89,7 @@ def setup_logging(config):
     ))
     logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
     logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
+    logging.getLogger('aiogram.dispatcher').addFilter(StartupConflictFilter())
 
 
 async def set_menu(bot):
@@ -77,11 +120,15 @@ async def run(config, run_for=None):
         me = await bot.get_me()
         log.info('authenticated with Telegram as @%s', me.username)
         await set_menu(bot)
+        await wait_for_old_instance(stop, 0 if run_for is not None else config.start_delay)
+        if stop.is_set():
+            return True
         scheduler = asyncio.create_task(run_scheduler(
             stop, bot=bot, api=api, cache=cache, limiter=RateLimiter(),
         ))
         polling = asyncio.create_task(dp.start_polling(
             bot, allowed_updates=ALLOWED_UPDATES, handle_signals=False, close_bot_session=False,
+            polling_timeout=POLLING_TIMEOUT,
         ))
         if run_for is not None:
             loop.call_later(run_for, stop.set)

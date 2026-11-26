@@ -298,6 +298,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'core.middleware.ProbePathMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     # Before every middleware that rewrites the body, so compression runs last.
@@ -679,6 +680,9 @@ LOG_LEVEL = config('LOG_LEVEL', default='INFO').upper()
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'probe_not_found': {'()': 'core.middleware.ProbeNotFoundFilter'},
+    },
     'formatters': {
         'line': {
             'format': '%(asctime)s %(levelname)s %(name)s [%(process)d:%(threadName)s] %(message)s',
@@ -691,7 +695,7 @@ LOGGING = {
     'loggers': {
         'django': {'handlers': ['console'], 'level': LOG_LEVEL, 'propagate': False},
         # 4xx/5xx with tracebacks; keep even when LOG_LEVEL is raised.
-        'django.request': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
+        'django.request': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False, 'filters': ['probe_not_found']},
         'django.security': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
         'django.db.backends': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
         'apps': {'handlers': ['console'], 'level': LOG_LEVEL, 'propagate': False},
