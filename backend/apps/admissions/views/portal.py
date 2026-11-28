@@ -32,14 +32,14 @@ from ..serializers import (
 )
 from ..serializers.portal import CHOOSE_AVAILABLE_TIME, MeetingAvailabilityRepeatSerializer, MeetingAvailabilitySerializer, MeetingScheduleSerializer
 from ..essay_lab.streak import clamp_essay_seconds, record_essay_seconds
-from ..listing import ListQueryMixin
+from ..listing import STUDENT_SEARCH_FIELDS, ListQueryMixin, search_terms, term_query
 from ..meeting_service import create_staff_booking, notice_time, notify_participant, notify_student
 from ..meetings import (
     MAX_REPEAT_SLOTS, add_free_slots, bookable_slots, fill_schedule, free_slots, notice_message, outside_window, overlapping, respecting_notice,
     too_soon_for_student, top_up_schedule, top_up_schedules, upcoming_slots, weekly_starts, with_availability, within_window,
 )
 from ..params import flag_param, int_param
-from ..scoping import booking_participants_for, scope_students, visible_students
+from ..scoping import bookable_students, booking_participants_for, scope_students, visible_students
 from .common import CONTACT_LIST_LIMIT, SCREEN_TIME_TEAM_LIMIT
 
 
@@ -113,7 +113,7 @@ class BookingPermission(permissions.BasePermission):
     """Keep meeting requests scoped to the student and the selected staff participant."""
 
     STUDENT_ACTIONS = {'list', 'retrieve', 'create', 'participants', 'availability', 'approve', 'reject', 'cancel', 'reschedule', 'destroy'}
-    STAFF_ACTIONS = {'list', 'retrieve', 'create', 'availability', 'availability_repeat', 'availability_weekly', 'approve', 'reject', 'complete', 'cancel', 'reschedule', 'destroy'}
+    STAFF_ACTIONS = {'list', 'retrieve', 'create', 'students', 'availability', 'availability_repeat', 'availability_weekly', 'approve', 'reject', 'complete', 'cancel', 'reschedule', 'destroy'}
 
     def has_permission(self, request, view):
         user = request.user
@@ -179,7 +179,7 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
         user = self.request.user
         if user.role in BOOKING_STAFF_ROLES:
             student_id = int_param(self.request.data, 'student')
-            profile = visible_students(user).filter(id=student_id).first()
+            profile = bookable_students(user).filter(id=student_id).first()
             if not profile:
                 raise drf_serializers.ValidationError({'student': 'Select one of your students.'})
             data = serializer.validated_data
@@ -217,6 +217,19 @@ class BookingViewSet(ListQueryMixin, viewsets.ModelViewSet):
             self._notify_participant(
                 booking, 'New meeting request', f'{student_name} requested "{booking.topic}" on {meeting_time}.',
             )
+
+    @action(detail=False, methods=['get'])
+    def students(self, request):
+        """Staff: students they may invite to a meeting, found by name. Only the id and name are shown."""
+        queryset = bookable_students(request.user).select_related('user').order_by('user__first_name', 'user__last_name', 'id')
+        for term in search_terms(request.query_params.get('search')):
+            queryset = queryset.filter(term_query(STUDENT_SEARCH_FIELDS, term))
+        page = self.paginate_queryset(queryset)
+        return self.get_paginated_response([
+            {'id': profile.id, 'user_detail': {
+                'first_name': profile.user.first_name, 'last_name': profile.user.last_name, 'username': profile.user.username,
+            }} for profile in page
+        ])
 
     @action(detail=False, methods=['get'])
     def participants(self, request):

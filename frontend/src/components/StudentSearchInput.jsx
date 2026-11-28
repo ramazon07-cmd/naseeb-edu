@@ -11,9 +11,10 @@ const toChoice = (student) => ({ id: student.id, name: fullName(student.user_det
  * One input that finds a student by name on the server and picks them.
  * `value`: the chosen student ({ id, name }) or null; a value without a name
  * has its name looked up. `onChange(student | null)`. `name` adds a hidden
- * input carrying the id, for forms read with FormData.
+ * input carrying the id, for forms read with FormData. `source`: the list
+ * searched (`bookings/students` lets assistants find their whole school).
  */
-export function StudentSearchInput({ value = null, onChange, name, label = 'Student', required = false, disabled = false, hint = '' }) {
+export function StudentSearchInput({ value = null, onChange, name, label = 'Student', required = false, disabled = false, hint = '', source = 'students' }) {
   const labelId = useId();
   const listId = useId();
   const [failedId, setFailedId] = useState(null);
@@ -45,12 +46,12 @@ export function StudentSearchInput({ value = null, onChange, name, label = 'Stud
     if (!open) return undefined;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      api.page('students', `?${new URLSearchParams({ search: searchTerm, page_size: '10' })}`, controller.signal)
+      api.page(source, `?${new URLSearchParams({ search: searchTerm, page_size: '10' })}`, controller.signal)
         .then((data) => setFound({ term: searchTerm, items: (data?.results || []).map(toChoice), error: '' }))
         .catch((err) => { if (err?.name !== 'AbortError') setFound({ term: searchTerm, items: [], error: err?.message || t("Check your connection and try again.") }); });
     }, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [open, searchTerm]);
+  }, [open, searchTerm, source]);
 
   const searching = found.term !== searchTerm;
   const options = searching ? [] : found.items;

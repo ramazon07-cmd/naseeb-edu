@@ -257,15 +257,19 @@ class OrderingTests(RulesFixture, APITestCase):
 
     def test_suggested_programs_do_not_match_an_abbreviation_inside_another_word(self):
         from apps.admissions.college_match import suggested_programs
+        from apps.admissions.college_search import eligible_programs
         from apps.admissions.models import UniversityProgram
         UniversityProgram.objects.create(university=self.state, name='BSc Physics', canonical_major='Physics')
         UniversityProgram.objects.create(university=self.state, name='BA Political Science', canonical_major='Political Science')
         UniversityProgram.objects.create(university=self.state, name='BSc CS Theory', canonical_major='CS Theory')
+        # As college match loads it: only eligible programs. Unfiltered, the fixture's inactive "Closed Program"
+        # made a third match, and which two survived the cap depended on the database's collation.
+        state = University.objects.prefetch_related(eligible_programs()).get(pk=self.state.pk)
         for major in ('cs', 'it'):
-            found = [item['name'] for item in suggested_programs(self.state, [major])]
+            found = [item['name'] for item in suggested_programs(state, [major])]
             self.assertNotIn('BSc Physics', found, major)
             self.assertNotIn('BA Political Science', found, major)
-        self.assertIn('BSc CS Theory', [item['name'] for item in suggested_programs(self.state, ['cs'])])
+        self.assertIn('BSc CS Theory', [item['name'] for item in suggested_programs(state, ['cs'])])
 
 
 class ListShapeTests(RulesFixture, APITestCase):

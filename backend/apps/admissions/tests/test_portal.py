@@ -9,6 +9,7 @@ from ..models import (
     ProgramService,
     ScreenTimeDaily,
     StoreItem,
+    StudentProfile,
     StudentMessage,
 )
 from .base import RoleIsolationBase
@@ -103,6 +104,66 @@ class PortalRoleIsolationTests(RoleIsolationBase):
         self.assertEqual(own_edit.status_code, status.HTTP_200_OK)
         self.assertEqual(own_edit.data['body'], 'Corrected answer')
         self.assertEqual(self.client.delete(own_url).status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_student_can_book_an_assistant_of_their_own_school_only(self):
+        def assistant(name, school):
+            return User.objects.create_user(
+                username=name, email=f'{name}@example.com', password='StrongPass123!',
+                role=User.Role.ASSISTANT, school=school, supervising_counselor=self.counselor if school == self.school_a else None,
+            )
+        own, other = assistant('assistant-a-booking', self.school_a), assistant('assistant-b-booking', self.school_b)
+        self.client.force_authenticate(self.student_a_user)
+        ids = {item['id'] for item in self.client.get('/api/bookings/participants/').data}
+        self.assertIn(own.id, ids)
+        self.assertNotIn(other.id, ids)
+        slot = MeetingAvailability.objects.create(participant=own, starts_at='2027-11-22T09:00:00Z', duration_minutes=30)
+        booked = self.client.post('/api/bookings/', {
+            'participant': own.id, 'topic': 'Essay help', 'starts_at': '2027-11-22T09:00:00Z',
+            'duration_minutes': 30, 'availability_slot': slot.id,
+        }, format='json')
+        self.assertEqual(booked.status_code, status.HTTP_201_CREATED, booked.data)
+        blocked = self.client.post('/api/bookings/', {
+            'participant': other.id, 'topic': 'Wrong school', 'starts_at': '2027-11-23T09:00:00Z', 'duration_minutes': 30,
+        }, format='json')
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_assistant_invites_any_student_of_their_school_only(self):
+        assistant = User.objects.create_user(
+            username='assistant-a-invites', email='assistant-a-invites@example.com', password='StrongPass123!',
+            role=User.Role.ASSISTANT, school=self.school_a, supervising_counselor=self.counselor,
+        )
+        # student_a is not assigned to this assistant: the whole school is still invitable.
+        self.client.force_authenticate(assistant)
+        found = self.client.get('/api/bookings/students/', {'search': self.student_a_user.username})
+        self.assertEqual(found.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['id'] for item in found.data['results']], [self.student_a.id])
+        self.assertEqual(set(found.data['results'][0]), {'id', 'user_detail'})
+        listed = {item['id'] for item in self.client.get('/api/bookings/students/').data['results']}
+        self.assertIn(self.student_a.id, listed)
+        self.assertNotIn(self.student_b.id, listed)
+
+        invited = self.client.post('/api/bookings/', {
+            'student': self.student_a.id, 'topic': 'Essay check-in', 'starts_at': '2027-11-24T09:00:00Z', 'duration_minutes': 30,
+        }, format='json')
+        self.assertEqual(invited.status_code, status.HTTP_201_CREATED, invited.data)
+        self.assertEqual(Booking.objects.get(pk=invited.data['id']).participant, assistant)
+        blocked = self.client.post('/api/bookings/', {
+            'student': self.student_b.id, 'topic': 'Other school', 'starts_at': '2027-11-25T09:00:00Z', 'duration_minutes': 30,
+        }, format='json')
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Booking.objects.filter(student=self.student_b, participant=assistant).exists())
+
+        # Students may not list the school's students; a counselor still sees only their own.
+        self.client.force_authenticate(self.student_a_user)
+        self.assertEqual(self.client.get('/api/bookings/students/').status_code, status.HTTP_403_FORBIDDEN)
+        unassigned = StudentProfile.objects.create(
+            user=User.objects.create_user('student-a-unassigned', 'unassigned@example.com', 'StrongPass123!', role=User.Role.STUDENT, school=self.school_a),
+            school=self.school_a, school_name=self.school_a.name,
+        )
+        self.client.force_authenticate(self.counselor)
+        counselor_list = {item['id'] for item in self.client.get('/api/bookings/students/').data['results']}
+        self.assertIn(self.student_a.id, counselor_list)
+        self.assertNotIn(unassigned.id, counselor_list)
 
     def test_booking_is_limited_to_related_staff_and_target_participant(self):
         other_school_staff = User.objects.create_user(

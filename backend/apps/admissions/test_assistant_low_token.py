@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.admissions import ai_budget, assistant, streaming
+from apps.admissions import ai_budget, ai_providers, assistant, streaming
 from apps.admissions.assistant_local import answer_locally
 from apps.admissions.models import AiUsageLog, Application, RoadmapMission, School, StudentProfile, Task, University
 from apps.users.models import User
@@ -230,7 +230,9 @@ class EndpointTests(Fixture, APITestCase):
 
     @override_settings(AI_PROVIDER='claude_cli', APP_ENV='development')
     def test_the_usage_row_names_the_provider_and_the_source_stays_gateway(self):
-        with mock.patch.object(assistant, '_gateway_stream', side_effect=lambda *a: iter(['AI'])):
+        # The call itself is mocked, so the `claude` binary need not be installed (CI has none).
+        with mock.patch.object(ai_providers, 'cli_available', return_value=True), \
+                mock.patch.object(assistant, '_gateway_stream', side_effect=lambda *a: iter(['AI'])):
             response, text = self.chat('Which tasks are overdue?')
         self.assertEqual((response['X-Assistant-Source'], text), ('gateway', 'AI'))
         self.assertEqual(AiUsageLog.objects.get().provider, 'claude_cli')

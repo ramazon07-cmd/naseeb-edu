@@ -286,7 +286,8 @@ class ReasonsTests(MatchFixture, APITestCase):
 
     @override_settings(AI_PROVIDER='claude_cli', APP_ENV='development')
     def test_the_usage_row_names_the_provider_that_ran(self):
-        with self.gateway():
+        # The call itself is mocked, so the `claude` binary need not be installed (CI has none).
+        with mock.patch.object(ai_providers, 'cli_available', return_value=True), self.gateway():
             self.assertEqual(self.client.post(REASONS_URL, {'language': 'en'}, format='json').status_code, 200)
         self.assertEqual(AiUsageLog.objects.get(feature=match_reasons.FEATURE).provider, 'claude_cli')
 
