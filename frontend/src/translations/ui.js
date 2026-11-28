@@ -2261,6 +2261,7 @@ export const UI_TRANSLATIONS = {
   'Version {0}': ['Versiya {0}', 'Версия {0}'],
 
   // Previously missing (navigation, chat details, onboarding)
+  Version: ['Versiya', 'Версия'],
   'Account menu': ['Hisob menyusi', 'Меню аккаунта'],
   'Main navigation': ['Asosiy navigatsiya', 'Основная навигация'],
   Notifications: ['Bildirishnomalar', 'Уведомления'],

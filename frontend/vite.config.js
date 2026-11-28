@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { checkBuildApiConfig } from './scripts/api-config.mjs'
@@ -12,6 +13,16 @@ const apiProxy = { '/api': { target: process.env.API_PROXY_TARGET || 'http://127
 // index.html's inline boot script reads the same session key as the app.
 const sessionKey = { name: 'naseeb-session-key', transformIndexHtml: injectSessionKey }
 
+// frontend/VERSION holds MAJOR.MINOR.PATCH.BUILD. It lives inside frontend/ so it is part of the Docker build
+// context and of a Vercel project rooted at frontend/. A missing file falls back to 0.0.0.0; a malformed one fails the build.
+function readAppVersion() {
+  let text
+  try { text = readFileSync(new URL('./VERSION', import.meta.url), 'utf8').trim() } catch { return '0.0.0.0' }
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(text)) throw new Error(`VERSION must look like 1.2.3.4, got "${text}"`)
+  return text
+}
+const appVersion = readAppVersion()
+
 export default defineConfig(({ command, mode }) => {
   // A deploy that could not reach the API (e.g. Vercel without
   // NASEEB_API_ORIGIN) fails here instead of serving index.html for /api.
@@ -20,6 +31,7 @@ export default defineConfig(({ command, mode }) => {
 })
 
 const config = {
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   plugins: [react(), sessionKey, i18nDictionaries()],
   build: {
     rollupOptions: {
