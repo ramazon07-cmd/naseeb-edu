@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, BookOpen, Brain, BrainCircuit, Briefcase, Check, CheckCircle2, ChevronRight, CircleHelp, CloudOff, Download, Fingerprint, Heart, Hexagon, IdCard, Lightbulb, Lock, Puzzle, RefreshCw, Sparkles, Target } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BookOpen, Brain, BrainCircuit, Briefcase, Check, CheckCircle2, ChevronRight, CircleHelp, CloudOff, Compass, Download, Fingerprint, Heart, Hexagon, IdCard, Lightbulb, Lock, Puzzle, RefreshCw, Target } from 'lucide-react';
 import { api } from '../api';
 import { t } from '../i18n';
 import { Panel } from '../components/ui';
@@ -604,7 +604,7 @@ function MindMajors({ left, lockReason, shortlist, revealed, onReveal, student, 
   const unlocked = Boolean(majors) || ready
   return <section className="nb-mf-sec nb-mf-maj" style={{ '--i': 7 }} aria-labelledby="mind-majors-title">
     <header>
-      <span className="nb-mf-si"><Sparkles size={18} aria-hidden="true" /></span>
+      <span className="nb-mf-si"><Compass size={18} aria-hidden="true" /></span>
       <h3 id="mind-majors-title">{majors ? t('Your three majors') : t('Who could you become?')}</h3>
       <span className="nb-mf-tag">{unlocked ? t('Your three majors are ready') : <><Lock size={12} aria-hidden="true" /> {left > 0 ? t('{n} tests left', { n: left }) : t('Locked')}</>}</span>
     </header>
