@@ -78,6 +78,8 @@ class School(TimeStampedModel):
     contact_phone = models.CharField(max_length=32, blank=True)
     is_active = models.BooleanField(default=True)
     workspace_type = models.CharField(max_length=20, choices=WorkspaceType.choices, default=WorkspaceType.SCHOOL)
+    # On: every counselor of this school sees all its students, not only their own (scoping.student_lookups).
+    counselors_see_all_students = models.BooleanField(default=False)
     owner_counselor = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
