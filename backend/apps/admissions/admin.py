@@ -71,7 +71,7 @@ class SchoolAdmin(ProductAuditAdminMixin, admin.ModelAdmin):
     audit_prefix = 'school'
     list_display = ('name', 'code', 'region', 'workspace_type', 'owner_counselor', 'contact_email', 'is_active')
     search_fields = ('name', 'code', 'contact_email')
-    list_filter = ('workspace_type', 'region', 'is_active')
+    list_filter = ('workspace_type', 'region', 'is_active', 'counselors_see_all_students')
 
 
 @admin.register(StudentProfile)
