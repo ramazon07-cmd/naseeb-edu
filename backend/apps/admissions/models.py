@@ -745,6 +745,10 @@ class TelegramImportChannel(TimeStampedModel):
     failed_message_id = models.PositiveBigIntegerField(null=True, blank=True)
     failed_attempts = models.PositiveSmallIntegerField(default=0)
     last_run_at = models.DateTimeField(null=True, blank=True)
+    # A backlog read that ran out of time: the page cursor it reached and the posts found so far, so the next
+    # run carries on from there instead of reading the same pages again. Cleared once the gap is closed.
+    backlog_before = models.PositiveBigIntegerField(null=True, blank=True)
+    backlog_posts = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ['channel']
@@ -2532,6 +2536,9 @@ class AiUsageLog(models.Model):
     fallback_used = models.BooleanField(default=False)
     # The provider did not charge and the budget was given back, so it is not a paid call.
     refunded = models.BooleanField(default=False)
+    # A further provider call inside one budget unit (a check's second step, an import's repair call): its tokens
+    # count, but it is not another use of the daily allowance.
+    extra_attempt = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-created_at', '-id']

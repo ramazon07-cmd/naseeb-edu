@@ -7,6 +7,7 @@ Whatever comes back is validated into a fixed shape here.
 """
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 
@@ -130,15 +131,17 @@ def uses_cli():
     return ai_providers.uses_cli(settings.TELEGRAM_IMPORT_AI_PROVIDER)
 
 
-def _post(body):
+def _post(body, deadline=None):
     """One call through the provider chosen for the import (gateway, or the Claude CLI).
 
     On the CLI the import never takes the last slot (a student's request keeps it) and gives up
-    after TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS without one: the run stops, the post waits.
+    after TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS without one: the run stops, the post waits. The call
+    never runs past ``deadline`` (the run's absolute hard deadline), slot wait included.
     """
+    wait = settings.TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS if uses_cli() else 0
     return ai_providers.chat(
-        body, settings.TELEGRAM_IMPORT_TIMEOUT_SECONDS, override=settings.TELEGRAM_IMPORT_AI_PROVIDER,
-        slot_wait=settings.TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS, reserve=1,
+        body, settings.TELEGRAM_IMPORT_TIMEOUT_SECONDS + wait, override=settings.TELEGRAM_IMPORT_AI_PROVIDER,
+        slot_wait=settings.TELEGRAM_IMPORT_CLI_SLOT_WAIT_SECONDS, reserve=1, deadline=deadline,
     )
 
 
@@ -164,39 +167,47 @@ RETRY_MESSAGE = (
 )
 
 
-def extract_json(text):
-    """The first complete JSON object in ``text`` (fences and surrounding prose ignored). ValueError if none."""
-    text = str(text or '')
-    decoder = json.JSONDecoder()
-    start = text.find('{')
-    while start != -1:
-        try:
-            value, _ = decoder.raw_decode(text, start)
-        except ValueError:
-            value = None
-        if isinstance(value, dict):
-            return value
-        start = text.find('{', start + 1)
-    raise ValueError('No JSON object in the reply.')
+extract_json = ai_providers.extract_json  # one shared extractor for every AI feature
+# A repair call is only started with at least this long left before the run's hard deadline.
+MIN_RETRY_SECONDS = 15
 
 
-def _call(body):
+class OutOfTime(Exception):
+    """The repair call cannot be made: the run's time (``time_budget``) or the job's budget (``budget_exhausted``)
+    is used up. The post is fine and waits for the next run."""
+
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _call(body, deadline=None):
+    started = time.monotonic()
     try:
-        payload = _post(body)
+        payload = _post(body, deadline)
     except urllib.error.HTTPError as exc:
         effort = body.get('reasoning_effort')
         if not (effort and _rejects_reasoning(exc)):
             raise
         body.pop('reasoning_effort')
-        payload = _post(body)
-    ai_usage.capture(payload, body)
+        payload = _post(body, deadline)
+    # A repair call shares the sink of the first one: both calls' tokens are kept.
+    ai_usage.capture(payload, body, accumulate=True)
+    sink = ai_usage.current_sink()
+    if sink is not None:
+        # This call on its own too, so each provider call gets its own usage row.
+        attempt = {'started': started}
+        ai_usage.capture(payload, body, attempt)
+        sink.setdefault('attempts', []).append(attempt)
     return payload['choices'][0]['message']['content']
 
 
-def request_gateway(messages):
+def request_gateway(messages, deadline=None, retry_gate=None):
     """One JSON answer. Gateway: non-streaming JSON mode, pinned model, temperature 0, no fallback model.
     Claude CLI: no JSON mode, so the prompt is tightened, the first JSON object is cut out of the reply and,
-    when the reply is unusable, one follow-up asks for only the JSON before the attempt counts as failed."""
+    when the reply is unusable, one follow-up asks for only the JSON before the attempt counts as failed.
+    ``deadline`` (absolute, ``time.monotonic()``) bounds every call; the follow-up is skipped (OutOfTime) when
+    less than MIN_RETRY_SECONDS is left, or when ``retry_gate()`` (the job budget for the second call) refuses."""
     cli = uses_cli()
     if cli:
         messages = [dict(m, content=m['content'] + CLI_RULES) if m.get('role') == 'system' else m for m in messages]
@@ -211,18 +222,22 @@ def request_gateway(messages):
     effort = (settings.TELEGRAM_IMPORT_REASONING_EFFORT or '').strip()
     if effort and not cli:
         body['reasoning_effort'] = effort
-    content = _call(body)
+    content = _call(body, deadline)
     if not cli:
         return json.loads(re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE))
     try:
-        raw = extract_json(content)
+        raw = extract_json(content, ('is_program',))
         validate(raw)  # only to learn whether the answer is usable; the caller validates again
         return raw
     except ValueError:
+        if deadline is not None and deadline - time.monotonic() < MIN_RETRY_SECONDS:
+            raise OutOfTime('time_budget') from None
+        if retry_gate is not None and not retry_gate():
+            raise OutOfTime('budget_exhausted') from None
         body['messages'] = messages + [
             {'role': 'assistant', 'content': str(content)[:2000]}, {'role': 'user', 'content': RETRY_MESSAGE},
         ]
-        return extract_json(_call(body))
+        return extract_json(_call(body, deadline), ('is_program',))
 
 
 def _text(value, limit):
@@ -278,18 +293,19 @@ def validate(raw):
     }
 
 
-def format_post(post, text, links, today, page=None):
+def format_post(post, text, links, today, page=None, deadline=None, retry_gate=None):
     """Validated fields for one post.
 
     Raises GatewayDown when the gateway cannot be reached or refuses the call (outage,
-    bad key, rate limit, 5xx) and FormatterUnavailable when its answer is unusable.
+    bad key, rate limit, 5xx), FormatterUnavailable when its answer is unusable and OutOfTime when the
+    repair call has no time or budget left. ``deadline`` bounds every provider call.
     """
     messages = [
         {'role': 'system', 'content': SYSTEM_PROMPT},
         {'role': 'user', 'content': user_message(post, text, links, today, page)},
     ]
     try:
-        return validate(request_gateway(messages))
+        return validate(request_gateway(messages, deadline, retry_gate))
     except urllib.error.HTTPError as exc:
         if exc.code in GATEWAY_DOWN_STATUSES or exc.code >= 500:
             raise GatewayDown(f'HTTPError {exc.code}') from None

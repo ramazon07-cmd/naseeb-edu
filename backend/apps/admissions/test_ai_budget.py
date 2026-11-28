@@ -154,7 +154,7 @@ class EssayCoachBudgetTests(EssayLabTestCase):
     def test_per_user_daily_limit(self):
         essay = self.make_essay()
         payload = {'summary': 'ok', 'strengths': [], 'suggestions': [],
-                   'scores': {'reflection': 1, 'specificity': 1, 'voice': 1, 'structure': 1, 'prompt_fit': 1}}
+                   'scores': {'reflection': 1, 'specificity': 1, 'voice': 1, 'structure': 1, 'prompt_fit': 1}, 'notes': []}
 
         def check(text=None):
             seq = 0

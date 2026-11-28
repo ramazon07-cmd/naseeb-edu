@@ -495,6 +495,24 @@ def _open_gateway(body, timeout):
         return urllib.request.urlopen(_gateway_request(body), timeout=timeout)
 
 
+CLI_CHARS_PER_TOKEN = 4
+
+
+def limit_reply(text, max_tokens):
+    """``text`` cut to about ``max_tokens`` tokens, at a sentence end when one is near. The Claude CLI has no
+    token ceiling of its own, so the length limit the gateway would enforce is enforced here after the reply."""
+    limit = max(1, max_tokens) * CLI_CHARS_PER_TOKEN
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    ends = [cut.rfind(mark) for mark in ('. ', '! ', '? ', '.\n', '!\n', '?\n')]
+    end = max(ends)
+    if end >= limit // 2:
+        return cut[:end + 1].rstrip()
+    space = cut.rfind(' ')
+    return (cut[:space] if space >= limit // 2 else cut).rstrip() + '…'
+
+
 def _provider_ready():
     """The gateway key is set, or (temporary bridge) the Claude CLI is allowed and installed."""
     if ai_providers.uses_cli():
@@ -530,7 +548,7 @@ def _gateway_stream(messages, system_prompt):
         if sink is not None:
             ai_usage.capture(payload, cli_body, sink)
             sink['finish_reason'] = 'stop'
-        content = payload['choices'][0]['message']['content']
+        content = limit_reply(payload['choices'][0]['message']['content'], settings.AI_ASSISTANT_MAX_OUTPUT_TOKENS)
         if content:
             yield content
         return
@@ -601,7 +619,12 @@ def _answer_cache_key(language, tier, question, messages, topics):
     normalized = re.sub(r'\s+', ' ', _fold(question)).strip(' \t.!?')
     if FIRST_PERSON.search(normalized):
         return None
-    digest = hashlib.sha256(f'{PROMPT_VERSION}|{language or "auto"}|{tier}|{normalized}'.encode('utf-8')).hexdigest()
+    # The provider and the model that really answers are part of the key: a switch (gateway to CLI, a new CLI
+    # model) never serves what another model wrote.
+    identity = f'{ai_providers.provider()}|{ai_providers.active_model(tier_model(tier))}'
+    digest = hashlib.sha256(
+        f'{PROMPT_VERSION}|{identity}|{language or "auto"}|{tier}|{normalized}'.encode('utf-8'),
+    ).hexdigest()
     return f'assistant-answer:{digest}'
 
 
@@ -732,6 +755,7 @@ class AssistantChatView(APIView):
         # really is instead of being labelled as an AI answer.
         gateway_chunks = None
         first_chunk = ''
+        refunded_unit = False
         if use_gateway:
             usage_sink['route'] = {'model': tier_model(tier)}
             gateway_chunks = _gateway_stream(messages, _system_prompt(language, context_text))
@@ -739,6 +763,7 @@ class AssistantChatView(APIView):
                 first_chunk = next(gateway_chunks, '')
             except PROVIDER_ERRORS as error:
                 unbilled = is_unbilled(error)
+                refunded_unit = unbilled
                 logger.warning('assistant_provider_failure user_id=%s role=%s partial_chars=0 refunded=%s',
                                user.id, user.role, unbilled, exc_info=True)
                 if unbilled:
@@ -777,6 +802,7 @@ class AssistantChatView(APIView):
                             else ai_usage.PROVIDER_ERROR if use_gateway
                             else ai_usage.LOCAL_FALLBACK
                         ),
+                        refunded=refunded_unit,
                     )
             except Exception:
                 logger.warning('assistant_settle_failure user_id=%s', user.id, exc_info=True)

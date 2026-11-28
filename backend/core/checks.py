@@ -64,6 +64,23 @@ def ai_provider_check(app_configs, **kwargs):
 
 
 @checks.register()
+def ai_cli_model_check(app_configs, **kwargs):
+    """A bare model alias (`sonnet`) moves to a newer model when the CLI updates, while saved checks and caches
+    keep the old identity. Production on the CLI bridge should pin an exact model id."""
+    uses_cli = 'claude_cli' in (getattr(settings, 'AI_PROVIDER', ''), getattr(settings, 'TELEGRAM_IMPORT_AI_PROVIDER', ''))
+    if settings.APP_ENV != 'production' or not uses_cli:
+        return []
+    model = getattr(settings, 'AI_TEST_CLI_MODEL', '')
+    if model.lower().startswith('claude-') and any(char.isdigit() for char in model):
+        return []
+    return [checks.Warning(
+        f'AI_TEST_CLI_MODEL={model!r} is a moving alias, not an exact model id.',
+        hint='Set AI_TEST_CLI_MODEL to the exact model id (for example claude-sonnet-4-5) so results and caches stay tied to one model.',
+        id='naseeb.W011',
+    )]
+
+
+@checks.register()
 def public_site_url_check(app_configs, **kwargs):
     """FRONTEND_URL is put into every Telegram message and email, so a wrong one reaches users.
 

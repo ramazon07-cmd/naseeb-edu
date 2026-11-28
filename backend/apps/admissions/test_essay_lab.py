@@ -14,6 +14,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from . import ai_providers
 from .essay_lab import coach
 from .essay_lab.doc import (
     DocError, apply_delta, apply_ops, canonical_json, derive, doc_from_text, doc_hash, doc_stats, validate_doc,
@@ -1064,7 +1065,8 @@ class EssayLabDepthCheckTests(EssayLabTestCase):
             EssayTab.objects.filter(essay=self.essay).update(doc=make_doc('Brand new text.'), content='Brand new text.')
             return FakeGateway()(*args, **kwargs)
 
-        with mock.patch('urllib.request.urlopen', side_effect=slow_gateway):
+        with mock.patch('urllib.request.urlopen', side_effect=slow_gateway), \
+                mock.patch.object(ai_providers.deadline_io, 'run_bounded', lambda call, seconds, on_timeout=None: call()):
             self.assertEqual(self.check().status_code, status.HTTP_200_OK)
         checkpoint = EssayCheckpoint.objects.get(essay=self.essay, reason='depth_check')
         self.assertEqual(checkpoint.content, checked_content)

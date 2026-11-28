@@ -1,7 +1,6 @@
 """The provider switch: gateway by default, the Claude CLI for local testing only. The real CLI is never run."""
 
 import json
-import subprocess
 from unittest import mock
 
 from django.core import checks
@@ -15,7 +14,7 @@ from . import ai_providers, rec_letter_ai
 from .essay_lab import coach
 
 CLI = dict(AI_PROVIDER='claude_cli', AI_TEST_CLI_MODEL='sonnet', APP_ENV='development')
-RUN = 'apps.admissions.ai_providers.subprocess.run'
+RUN = 'apps.admissions.ai_providers._run_process'
 WHICH = 'apps.admissions.ai_providers.shutil.which'
 BODY = {
     'model': 'openai/gpt-5.4-mini',
@@ -34,7 +33,8 @@ def cli_output(text='{"ok": true}', **changes):
 
 
 def completed(stdout='', returncode=0, stderr=''):
-    return subprocess.CompletedProcess(['claude'], returncode, stdout, stderr)
+    """What `_run_process` returns: (returncode, stdout, stderr)."""
+    return (returncode, stdout, stderr)
 
 
 @override_settings(**CLI)
@@ -56,10 +56,9 @@ class ClaudeCliProviderTests(SimpleTestCase):
         self.assertEqual(command[command.index('--system-prompt') + 1], 'Answer in JSON.')
         self.assertEqual(command[command.index('--tools') + 1], '')
         self.assertNotIn('The essay text.', command)
-        kwargs = runner.call_args.kwargs
-        self.assertEqual(kwargs['input'], 'The essay text.')
-        self.assertEqual(kwargs['timeout'], 12)
-        self.assertFalse(kwargs.get('shell', False))
+        self.assertEqual(runner.call_args.args[1], 'The essay text.')
+        self.assertLessEqual(runner.call_args.args[2], 12)  # the slot wait came out of the same 12 s
+        self.assertGreater(runner.call_args.args[2], 10)
         self.assertIsInstance(payload, dict)
 
     def test_payload_has_the_gateway_shape(self):
@@ -78,7 +77,7 @@ class ClaudeCliProviderTests(SimpleTestCase):
         self.assertEqual((system, prompt), ('S', '[user]\nA\n\n[assistant]\nB'))
 
     def test_a_timeout_is_a_timeout_error(self):
-        error, _ = self.call(side_effect=subprocess.TimeoutExpired('claude', 12))
+        error, _ = self.call(side_effect=ai_providers.CliTimeout('The claude CLI timed out.'))
         self.assertIsInstance(error, TimeoutError)
 
     def test_a_non_zero_exit_is_an_os_error(self):
@@ -225,7 +224,7 @@ class ProductionBridgeTests(SimpleTestCase):
             self.assertTrue(ai_providers.configured())
             ai_providers.chat(BODY, 5)
         self.assertEqual(runner.call_args.args[0][0], '/var/data/claude/.local/bin/claude')
-        env = runner.call_args.kwargs['env']
+        env = ai_providers._cli_environment()
         self.assertEqual(env['HOME'], '/var/data/claude')
         self.assertEqual(env['DISABLE_AUTOUPDATER'], '1')
 
@@ -304,7 +303,7 @@ class CliSlotTests(SimpleTestCase):
     @override_settings(AI_CLI_MAX_CONCURRENT=1)
     def test_a_failed_call_gives_its_slot_back(self):
         with mock.patch(WHICH, return_value='/bin/claude'), \
-                mock.patch(RUN, side_effect=subprocess.TimeoutExpired('claude', 5)):
+                mock.patch(RUN, side_effect=ai_providers.CliTimeout('timed out')):
             with self.assertRaises(TimeoutError):
                 ai_providers.chat(BODY, 5)
         with mock.patch(WHICH, return_value='/bin/claude'), mock.patch(RUN, return_value=completed(cli_output())):
@@ -334,13 +333,13 @@ class AssistantCliTests(SimpleTestCase):
 class EducationAiCliTests(SimpleTestCase):
     def test_major_explanations_run_through_the_cli_without_a_gateway_key(self):
         from . import education_ai
-        payload = ai_providers._cli_payload(cli_output('{"summary": "ok"}'), {'model': 'claude-cli/sonnet'})
+        payload = ai_providers._cli_payload(cli_output('{"summary": "ok", "major_guidance": []}'), {'model': 'claude-cli/sonnet'})
         with override_settings(AI_PROVIDER='claude_cli', AI_GATEWAY_API_KEY='', OUTBOUND_AI_ENABLED=True), \
                 mock.patch(WHICH, return_value='/bin/claude'), \
                 mock.patch.object(ai_providers, 'chat', return_value=payload) as chat:
             self.assertTrue(education_ai.recommendation_ai_available())
             raw, body = education_ai._call_gateway({'majors': []})
-        self.assertEqual(education_ai._parse_gateway(raw, body), {'summary': 'ok'})
+        self.assertEqual(education_ai._parse_gateway(raw, body), {'summary': 'ok', 'major_guidance': []})
         self.assertTrue(chat.call_args.args[0]['model'].startswith('claude-cli/'))
 
     def test_a_cli_failure_is_an_unbilled_gateway_failure(self):

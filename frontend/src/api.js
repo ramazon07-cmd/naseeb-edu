@@ -562,11 +562,15 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
-  // { major_candidates, subject_strengths } -> AI explanation (mode 'ai'). 503 when AI is off or
-  // failed, 429 at the daily limit; counted in the AI budget. No page uses it yet.
-  educationMatchAI: (payload) => request('/education-matches/ai/', {
+  // The server picks the majors and subjects from the student's own profile; { major_candidates,
+  // subject_strengths } may only narrow them. -> AI explanation (mode 'ai'). 503 when AI is off or
+  // failed, 429 at the daily limit; counted in the AI budget. No page uses it yet. The server's own
+  // AI deadline is 30 s, so this waits a little longer than a plain read.
+  educationMatchAI: (payload = {}) => request('/education-matches/ai/', {
     method: 'POST',
     body: JSON.stringify(payload),
+    timeoutMs: 45_000,
+    retries: 0,
   }),
   list: listAll,
   page: listPage,

@@ -19,6 +19,7 @@ from core.ai_policy import outbound_ai_allowed
 from apps.users.cache_safety import cache_get, cache_set
 
 from . import ai_budget, ai_providers, ai_usage
+from .streaming import release_db_connection
 
 
 logger = logging.getLogger('naseeb.education_ai')
@@ -26,7 +27,7 @@ MAX_TEXT_LENGTH = 500
 CURRENT_ASSESSMENTS = {'personality', 'interests', 'subjects', 'reasoning'}
 CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 MAX_OUTPUT_TOKENS = 1200
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 FEATURE = 'education_match'
 
 
@@ -221,19 +222,16 @@ def _parse_gateway(raw, body):
     """Validate a billed provider answer; raises KeyError/IndexError/TypeError/ValueError."""
     payload = json.loads(raw.decode('utf-8'))
     ai_usage.capture(payload, body)
-    content = payload['choices'][0]['message']['content']
-    content = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content).strip(), flags=re.IGNORECASE)
-    result = json.loads(content)
-    if not isinstance(result, dict):
-        raise ValueError('AI response must be a JSON object.')
-    return result
+    return ai_providers.extract_json(payload['choices'][0]['message']['content'], ('major_guidance',))
 
 
 def _cache_key(profile, context):
     # Everything the model sees (ranked majors, subjects, assessment versions and
-    # scores, academic profile) plus the model and prompt, so any change misses.
+    # scores, academic profile) plus the provider, the model that really answers and the prompt,
+    # so any change (a provider switch, a new CLI model) misses.
+    model = ai_providers.active_model(settings.EDUCATION_MATCH_MODEL)
     fingerprint = hashlib.sha256(json.dumps(
-        [context, settings.EDUCATION_MATCH_MODEL, PROMPT_VERSION], sort_keys=True, default=str,
+        [context, ai_providers.provider(), model, PROMPT_VERSION], sort_keys=True, default=str,
     ).encode('utf-8')).hexdigest()
     return f'education-guidance:{profile.pk}:{fingerprint}'
 
@@ -259,6 +257,7 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
         ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.BUDGET_REFUSED)
         raise EducationAIBudgetExhausted()
     ai_usage.begin()
+    release_db_connection()  # don't hold a pooled connection while the provider works
     try:
         raw, body = _call_gateway(context)
     except GatewayFailure as failure:
@@ -272,9 +271,14 @@ def generate_education_guidance(profile, major_candidates, subject_strengths):
         if not result['major_guidance']:
             raise ValueError('AI response did not contain an allowed major.')
     except (KeyError, IndexError, TypeError, ValueError):
-        # The provider answered (and billed), so the call stays counted.
         logger.warning('education_ai_invalid_output student_id=%s', profile.pk)
-        ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.FAILED)
+        if ai_providers.uses_cli():
+            # The Claude CLI bills nothing per call: an unusable answer gives the allowance back.
+            ai_budget.refund(reservation)
+        # A gateway answer was billed, so that call stays counted.
+        ai_usage.record(
+            FEATURE, user, provider=ai_providers.provider(), status=ai_usage.FAILED, refunded=ai_providers.uses_cli(),
+        )
         raise EducationAIUnavailable()
     ai_usage.record(FEATURE, user, provider=ai_providers.provider(), status=ai_usage.OK)
     cache_set(cache_key, result, timeout=CACHE_TTL_SECONDS)

@@ -311,6 +311,9 @@ def add_tokens(user, tokens):
 def consume_job(feature):
     """Count one paid call made by a scheduled job (no user); ``False`` when the daily cap is reached.
 
+    Otherwise returns a truthy :class:`Reservation` to hand to :func:`refund`, so a refund undoes the very
+    counter that took the call even if the cache came back (or went down) in between.
+
     Like :func:`consume`, a refused call is undone at once. While the cache is down the
     job may use at most AI_FALLBACK_PROCESS_DAILY_BUDGET calls (and never more than its cap).
     """
@@ -323,18 +326,26 @@ def consume_job(feature):
     counts = count_hits([prefix], TTL_SECONDS)
     if counts is None:
         local_cap = min(cap, settings.AI_FALLBACK_PROCESS_DAILY_BUDGET)
-        allowed = _fallback.consume(day, [(f'{feature}:process', local_cap)])
+        key = f'{feature}:process'
+        allowed = _fallback.consume(day, [(key, local_cap)])
         logger.warning('ai_budget_cache_down feature=%s allowed=%s: using the per-process allowance', feature, allowed)
-        return allowed
+        return Reservation('process', day, [key]) if allowed else False
     if counts[0] <= cap:
-        return True
+        return Reservation('cache', day, [prefix])
     cache_decrement(prefix)
     _note([f'{prefix}:refused'])
     return False
 
 
-def refund_job(feature):
-    """Give back one call counted by :func:`consume_job` whose provider call failed."""
+def refund_job(feature, reservation=None):
+    """Give back one call counted by :func:`consume_job` whose provider call failed.
+
+    Pass the reservation ``consume_job`` returned: it undoes exactly that backend. Without one the backend is
+    guessed from whether the cache is reachable now, which can pick the wrong counter after an outage.
+    """
+    if reservation:
+        refund(reservation)
+        return
     day = timezone.localdate().isoformat()
     prefix = f'ai-budget:{feature}:{day}'
     if cache_get_many([prefix]) is None:

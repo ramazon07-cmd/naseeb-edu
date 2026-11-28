@@ -61,7 +61,11 @@ class ScheduledJobCommand(BaseCommand):
             try:
                 processed = self.run(**options)
             except Exception as exc:
-                record_run(name, started_at, time.monotonic() - started, 'failed', error=exc.__class__.__name__)
+                reason = getattr(exc, 'job_reason', '')  # a short, safe reason a job may attach to its failure
+                record_run(
+                    name, started_at, time.monotonic() - started, 'failed',
+                    error=f'{exc.__class__.__name__}: {reason}' if reason else exc.__class__.__name__,
+                )
                 raise
         duration = time.monotonic() - started
         record_run(name, started_at, duration, 'ok', processed=processed if isinstance(processed, int) else None)

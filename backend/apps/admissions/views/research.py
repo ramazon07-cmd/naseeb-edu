@@ -4,13 +4,14 @@ from rest_framework import permissions
 from rest_framework.response import Response
 from apps.users.throttles import ScopedRateThrottle
 from rest_framework.views import APIView
+from apps.users.entitlements import require_feature
 from apps.users.models import User
 from .. import match_reasons
-from ..college_match import college_match, match_with_context
+from ..college_match import college_match, intended_majors, match_with_context
 from ..college_search import (
     CollegeSearchParams, college_search, evidence_counts, fit_key, missing_fields,
 )
-from ..subjects import subjects_for_major
+from ..subjects import subject_name, subjects_for_major
 from ..subject_rankings import SubjectRankingParams, cached_subject_ranking
 from ..serializers import CollegeResearchProfileSerializer, EducationMatchAIRequestSerializer
 from ..education_ai import EducationAIBudgetExhausted, EducationAIUnavailable, generate_education_guidance
@@ -104,6 +105,19 @@ class SubjectRankingView(APIView):
         return Response(cached_subject_ranking(params.validated_data))
 
 
+def education_candidates(profile):
+    """(majors, subject names) the education explanation may talk about, from the student's own profile:
+    the stated target majors and the QS subjects they map to (at most 8 and 12)."""
+    majors = list(dict.fromkeys(major.strip() for major in intended_majors(profile) if major.strip()))[:8]
+    subjects = []
+    for major in majors:
+        for code in subjects_for_major(major):
+            name = subject_name(code)
+            if name and name not in subjects:
+                subjects.append(name)
+    return majors, subjects[:12]
+
+
 class EducationMatchAIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -112,15 +126,21 @@ class EducationMatchAIView(APIView):
     def post(self, request):
         if request.user.role != User.Role.STUDENT or not hasattr(request.user, 'student_profile'):
             return Response({'detail': 'Education match guidance is available to student accounts only.'}, status=403)
+        require_feature(request, 'ai_assistant')  # the plan's AI switch, before any cache, budget or provider
         serializer = EducationMatchAIRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         profile = request.user.student_profile
+        majors, subjects = education_candidates(profile)
+        # The student's own majors, never a client's list: a request may only narrow them.
+        wanted = {value.casefold() for value in serializer.validated_data.get('major_candidates', [])}
+        wanted_subjects = {value.casefold() for value in serializer.validated_data.get('subject_strengths', [])}
+        majors = [major for major in majors if not wanted or major.casefold() in wanted]
+        subjects = [name for name in subjects if not wanted_subjects or name.casefold() in wanted_subjects]
+        if not majors:
+            return Response({'detail': 'Add your target major to your research profile first.',
+                             'missing_fields': ['target_major']}, status=400)
         try:
-            result = generate_education_guidance(
-                profile=profile,
-                major_candidates=serializer.validated_data['major_candidates'],
-                subject_strengths=serializer.validated_data.get('subject_strengths', []),
-            )
+            result = generate_education_guidance(profile=profile, major_candidates=majors, subject_strengths=subjects)
         except EducationAIBudgetExhausted:
             return Response({'detail': 'The daily limit for AI explanations is reached. Try again tomorrow.'}, status=429)
         except EducationAIUnavailable:
@@ -163,6 +183,7 @@ class CollegeMatchReasonsView(APIView):
         profile = student_profile(request)
         if not profile:
             return Response({'detail': 'The college match is available to student accounts only.'}, status=403)
+        require_feature(request, 'ai_assistant')  # the plan's AI switch, before any cache, budget or provider
         missing = missing_fields(profile)
         if missing:
             return Response({'detail': 'Complete your research profile first.', 'missing_fields': missing}, status=400)

@@ -39,6 +39,7 @@ from core.ai_policy import outbound_ai_allowed
 
 from .. import ai_providers, ai_usage
 from ..assistant import redact_pii
+from ..gateway_errors import is_unbilled
 
 logger = logging.getLogger('naseeb.essay_coach')
 
@@ -861,7 +862,7 @@ def _call_timeout(deadline):
     return min(settings.ESSAY_COACH_TIMEOUT_SECONDS, remaining)
 
 
-def _request_gateway(messages, max_tokens, deadline):
+def _request_gateway(messages, max_tokens, deadline, required_keys=(), required_any=()):
     """One non-streaming JSON-mode call. Pinned model, temperature 0, no fallback model."""
     body = {
         'model': ai_providers.active_model(settings.ESSAY_COACH_MODEL),
@@ -875,16 +876,14 @@ def _request_gateway(messages, max_tokens, deadline):
     if effort:
         body['reasoning_effort'] = effort
     try:
-        payload = ai_providers.chat(body, _call_timeout(deadline))
+        payload = ai_providers.chat(body, _call_timeout(deadline), deadline=deadline)
     except urllib.error.HTTPError as exc:
         if not (effort and _rejects_reasoning(exc)):
             raise
         body.pop('reasoning_effort')
-        payload = ai_providers.chat(body, _call_timeout(deadline))
+        payload = ai_providers.chat(body, _call_timeout(deadline), deadline=deadline)
     ai_usage.capture(payload, body)
-    content_text = payload['choices'][0]['message']['content']
-    content_text = re.sub(r'^```(?:json)?\s*|\s*```$', '', str(content_text).strip(), flags=re.IGNORECASE)
-    return json.loads(content_text)
+    return ai_providers.extract_json(payload['choices'][0]['message']['content'], required_keys, required_any)
 
 
 def gateway_configured():
@@ -937,17 +936,24 @@ class CheckSpec:
     score_hidden: str = ''
 
 
-def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call):
-    """One billed call, recorded in ai_usage. Never retried (the only retry is the reasoning_effort 400)."""
+def _run_step(spec, user, messages, max_tokens, validate, deadline, before_call, extra_attempt=False, required_keys=(),
+              required_any=()):
+    """One billed call, recorded in ai_usage. Never retried (the only retry is the reasoning_effort 400).
+
+    A failure that cost nothing (no CLI slot, a CLI error, a refused gateway request) is recorded as refunded;
+    ``extra_attempt`` marks the check's second call, which is not another use of the daily allowance."""
     before_call()  # hand the database connection back for the length of the provider call
     ai_usage.begin()
     try:
-        validated = validate(_request_gateway(messages, max_tokens, deadline))
-    except _PROVIDER_ERRORS:
-        ai_usage.record(spec.feature, user, provider=ai_providers.provider(), status=ai_usage.FAILED)
+        validated = validate(_request_gateway(messages, max_tokens, deadline, required_keys, required_any))
+    except _PROVIDER_ERRORS as exc:
+        ai_usage.record(
+            spec.feature, user, provider=ai_providers.provider(), status=ai_usage.FAILED,
+            refunded=is_unbilled(exc), extra_attempt=extra_attempt,
+        )
         logger.warning('%s_provider_failure %s', spec.feature, spec.log_id)
         raise CoachUnavailable()
-    ai_usage.record(spec.feature, user, provider=ai_providers.provider(), status=ai_usage.OK)
+    ai_usage.record(spec.feature, user, provider=ai_providers.provider(), status=ai_usage.OK, extra_attempt=extra_attempt)
     return validated
 
 
@@ -1010,6 +1016,8 @@ def run_check(spec, user, before_call=lambda: None):
         # A rubric adds one evidence quote per criterion; a caller's extra keys need room too.
         (SCORED_STEP1_MAX_TOKENS if rubric else STEP1_MAX_TOKENS) + (EXTRA_STEP1_TOKENS if spec.step1_extra else 0),
         validate_step1, deadline, before_call,
+        # The score answer, or a safety answer: a metadata object such as {"word_count": 100} is not one.
+        required_any=('scores', 'safety', 'summary', 'mode'),
     )
     if 'scores' not in step1:
         # Answered instead of a score: the essay's current_danger flag, or the caller's own safety message.
@@ -1041,7 +1049,7 @@ def run_check(spec, user, before_call=lambda: None):
         notes = _run_step(
             spec, user, [system, user_message(instruction)], NOTE_TOKENS * cap + NOTES_BASE_TOKENS,
             lambda raw: validate_notes(raw.get('notes') if isinstance(raw, dict) else None, content, rubric, cap),
-            deadline, before_call,
+            deadline, before_call, extra_attempt=True, required_keys=('notes',),
         )
     result = build_result(step1, notes, rubric=rubric, overall=overall, **extras)
     return finished(result, step1), model

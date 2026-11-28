@@ -392,7 +392,7 @@ class EndpointTests(Fixture, APITestCase):
         self.as_new_student('lo5')
         self.ask('Explain the SAT format?', 'A')
         expected = 'assistant-answer:' + hashlib.sha256(
-            f'{assistant.PROMPT_VERSION}|en|simple|explain the sat format'.encode()).hexdigest()
+            f'{assistant.PROMPT_VERSION}|{ai_providers.provider()}|{ai_providers.active_model(assistant.tier_model("simple"))}|en|simple|explain the sat format'.encode()).hexdigest()
         self.assertEqual(assistant._answer_cache_key('en', 'simple', 'Explain the SAT format?', [1], set()), expected)
         self.assertNotIn('sat', expected.lower().replace('assistant-answer', ''))
         every_key = list(cache._cache) if hasattr(cache, '_cache') else []

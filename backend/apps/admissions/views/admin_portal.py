@@ -134,7 +134,8 @@ def _cost_estimate(tokens):
 
 def _today_from_log(school_names):
     """Today's paid calls from the usage log: used while the shared counters cannot be trusted
-    (cache down, or calls were counted on a per-process fallback). Refunded calls are left out."""
+    (cache down, or calls were counted on a per-process fallback). Refunded calls are left out, and so are
+    a check's further provider calls: the counters count one unit per check, not per call."""
     from .. import ai_budget
 
     start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -142,6 +143,8 @@ def _today_from_log(school_names):
         created_at__gte=start, refunded=False,
         status__in=(AiUsageLog.Status.OK, AiUsageLog.Status.INVALID_OUTPUT, AiUsageLog.Status.PROVIDER_ERROR),
     )
+    # Every Telegram import call (the repair call too) takes its own budget unit; a coach check's second step does not.
+    today = today.filter(Q(extra_attempt=False) | Q(feature='telegram_import'))
     report = {feature: {'used': 0, 'top_schools': []} for feature in ai_budget.FEATURES}
     for row in today.values('feature').annotate(n=Count('id')):
         if row['feature'] in report:

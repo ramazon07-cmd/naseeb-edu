@@ -34,10 +34,33 @@ class PageUnavailable(Exception):
     pass
 
 
-def public_addresses(host):
-    """The host's addresses, or PageUnavailable if any of them is not on the public internet."""
+def _resolve(host, timeout):
+    """``socket.getaddrinfo`` that gives up after ``timeout`` seconds (the lookup itself has no limit)."""
+    if timeout is None:
+        return socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+    outcome = {}
+
+    def lookup():
+        try:
+            outcome['infos'] = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        except BaseException as exc:  # noqa: BLE001 - handed to the caller
+            outcome['error'] = exc
+
+    worker = threading.Thread(target=lookup, daemon=True)
+    worker.start()
+    worker.join(max(0.0, timeout))
+    if worker.is_alive():
+        raise PageUnavailable('slow')
+    if 'error' in outcome:
+        raise outcome['error']
+    return outcome['infos']
+
+
+def public_addresses(host, timeout=None):
+    """The host's addresses, or PageUnavailable if any of them is not on the public internet.
+    The lookup is cut off after ``timeout`` seconds when one is given."""
     try:
-        infos = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        infos = _resolve(host, timeout)
     except (socket.gaierror, UnicodeError, OSError) as exc:
         raise PageUnavailable('dns') from exc
     addresses = []
@@ -89,7 +112,7 @@ def _get(url, stop_at):
     read in small chunks that return as soon as some bytes are there, and the time left is
     checked after every chunk. The body never grows past MAX_BYTES + 1."""
     parts = check_url(url)
-    address = public_addresses(parts.hostname)[0]
+    address = public_addresses(parts.hostname, min(TIMEOUT, _remaining(stop_at)))[0]
     connection = PinnedHTTPSConnection(parts.hostname, address)
     path = (parts.path or '/') + (f'?{parts.query}' if parts.query else '')
 
