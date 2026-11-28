@@ -713,6 +713,15 @@ class OpportunityProgram(TimeStampedModel):
     fee_text = models.CharField(max_length=300, blank=True)
     official_sources = models.JSONField(default=list, blank=True)
     official_verified_at = models.DateField(null=True, blank=True)
+    # Richer details researched from the organiser's own pages (import_official_programs, programs_details.json).
+    overview = models.TextField(blank=True)
+    benefits = models.JSONField(default=list, blank=True)
+    who_can_apply = models.JSONField(default=list, blank=True)
+    requirements_list = models.JSONField(default=list, blank=True)
+    team_format = models.CharField(max_length=160, blank=True)
+    selection_process = models.TextField(blank=True)
+    # Up to five public people from Uzbekistan: [{name, role, year, linkedin_url, source_url}].
+    past_participants = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ['program_type', 'deadline', 'title']

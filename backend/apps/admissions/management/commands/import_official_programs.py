@@ -4,7 +4,12 @@
 
 Rows are matched by id. Placeholder rows and ids that do not exist are skipped and reported. A value that
 is null or empty in the file never overwrites what the database already has, and running the same file twice
-changes nothing. No participant or winner names are read: only the fields below.
+changes nothing.
+
+The richer details (programs_details.json: overview, benefits, who can apply, requirements, selection and up to
+five public past participants from Uzbekistan) load in the same run when no file is named, or from `--details FILE`.
+A participant is kept only with a name and a public source link; a LinkedIn link only if it is a profile
+(linkedin.com/in/...). Nothing else about a person is read.
 """
 import json
 import re
@@ -12,34 +17,18 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
-from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
-from django.core.validators import URLValidator
 from django.db import transaction
 
 from apps.admissions.models import OpportunityProgram
+from apps.admissions.program_details import LIST_LIMITS, clean_people, clean_strings, link, text
 
 PROGRAM_TYPES = {'national', 'international'}
 DELIVERY = {'onsite', 'online', 'hybrid'}
 DEFAULT_FILE = Path(__file__).resolve().parents[2] / 'catalog_data' / 'official_research' / 'programs.json'
 # Aggregators, forms and social pages are never an official source.
 BLOCKED_HOSTS = ('opportunitiescorners', 'scholarshipscorner', 'opportunitydesk', 'docs.google', 'forms.gle', 'airtable', 'instagram', 'facebook')
-url_check = URLValidator(schemes=['http', 'https'])
-
-
-def text(value, limit):
-    return value.strip()[:limit] if isinstance(value, str) and value.strip() else None
-
-
-def link(value, limit=1000):
-    value = text(value, limit + 1)
-    if not value or len(value) > limit:
-        return None
-    try:
-        url_check(value)
-    except ValidationError:
-        return None
-    return value
+DETAILS_FILE = DEFAULT_FILE.with_name('programs_details.json')
 
 
 def official(url):
@@ -127,12 +116,72 @@ def changes_for(row):
     return values
 
 
+def detail_changes_for(row):
+    """The detail fields a programs_details.json row states. Empty or null values are left out."""
+    values = {
+        'overview': text(row.get('overview'), 1200),
+        'team_format': text(row.get('team'), 160),
+        'selection_process': text(row.get('selection_process'), 1500),
+        'benefits': clean_strings(row.get('benefits'), LIST_LIMITS['benefits']),
+        'who_can_apply': clean_strings(row.get('who_can_apply'), LIST_LIMITS['who_can_apply']),
+        'requirements_list': clean_strings(row.get('requirements'), LIST_LIMITS['requirements_list']),
+        'past_participants': clean_people(row.get('past_participants_uz')),
+    }
+    return {name: value for name, value in values.items() if value is not None}
+
+
+def edition_changes_for(detail):
+    """When the details describe a newer edition than programs.json, `edition_core` carries that one edition's
+    place and dates. These replace the older values (an empty city or date clears a stale one), so a program
+    never shows one edition's overview next to another edition's location and dates."""
+    core = detail.get('edition_core')
+    if not isinstance(core, dict):
+        return {}
+    # Only the keys the edition states are touched; a stated null clears the older edition's value.
+    values = {}
+    for name, convert in (('country', lambda v: text(v, 120) or ''), ('city', lambda v: text(v, 120) or ''), ('start_date', day), ('end_date', day),
+                          ('deadline', day), ('deadline_text', lambda v: text(v, 2000) or '')):
+        if name in core:
+            values[name] = convert(core[name])
+    # Price, delivery and apply page belong to the edition too (a winter online price is not the summer one).
+    if 'fee_usd' in core:
+        values['fee_usd'] = whole(core['fee_usd'])
+    if 'fee_text' in core:
+        values['fee_text'] = text(core['fee_text'], 300) or ''
+    if core.get('delivery_mode') in DELIVERY:
+        values['delivery_mode'] = core['delivery_mode']
+    if 'application_url' in core:
+        apply_url = link(core['application_url'])
+        # An apply page is often a form host (Airtable, Google Forms, Typeform); only evidence sources must be official.
+        values['application_url'] = apply_url if apply_url and apply_url.lower().startswith('https://') else ''
+    if text(core.get('title'), 220):
+        values['title'] = text(core.get('title'), 220)
+    sources = [item for item in (link(entry) for entry in core.get('sources') or [] if isinstance(entry, str)) if item and official(item)]
+    if sources:
+        values['official_sources'] = sources
+        values['source_url'] = sources[0]
+    return values
+
+
 class Command(BaseCommand):
     help = 'Import official-site program details into OpportunityProgram by id (idempotent).'
 
     def add_arguments(self, parser):
         parser.add_argument('file', nargs='?', default=str(DEFAULT_FILE), help='Default: the research file shipped in catalog_data/official_research.')
+        parser.add_argument('--details', default=None, help='Details file (programs_details.json). Default: the shipped one, only when no program file is named.')
         parser.add_argument('--dry-run', action='store_true', help='Report what would change and write nothing.')
+
+    def read_details(self, options):
+        path = options['details'] or (str(DETAILS_FILE) if options['file'] == str(DEFAULT_FILE) else None)
+        if not path:
+            return {}
+        try:
+            rows = json.loads(Path(path).read_text(encoding='utf-8'))
+        except (OSError, ValueError) as error:
+            raise CommandError(f'{path}: {error}')
+        if not isinstance(rows, list):
+            raise CommandError('expected a JSON array in the details file')
+        return {row['id']: row for row in rows if isinstance(row, dict) and isinstance(row.get('id'), int)}
 
     def handle(self, *args, **options):
         try:
@@ -141,6 +190,7 @@ class Command(BaseCommand):
             raise CommandError(f"{options['file']}: {error}")
         if not isinstance(rows, list):
             raise CommandError('expected a JSON array')
+        details = self.read_details(options)
         programs = OpportunityProgram.objects.in_bulk()
         totals = {'rows': 0, 'updated': 0, 'unchanged': 0, 'placeholder': 0, 'missing': 0, 'no_official_data': 0}
         missing = []
@@ -157,6 +207,16 @@ class Command(BaseCommand):
                 missing.append(str(row['id']))
                 continue
             values = changes_for(row)
+            detail = details.get(row['id'], {})
+            values.update(detail_changes_for(detail))
+            values.update(edition_changes_for(detail))
+            # A deadline the details state is used when neither the catalog row nor the edition has one.
+            if 'deadline' not in values and not program.deadline and day(detail.get('deadline')):
+                values['deadline'] = day(detail['deadline'])
+            # Facts the catalog row lacks are filled from the details; an existing value is never replaced.
+            for name, found in (('country', text(detail.get('country'), 120)), ('eligible_ages', text(detail.get('age_range'), 160))):
+                if found and not values.get(name) and not getattr(program, name):
+                    values[name] = found
             if not values:
                 totals['no_official_data'] += 1
                 continue

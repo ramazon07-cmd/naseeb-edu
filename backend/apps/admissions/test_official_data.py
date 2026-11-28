@@ -297,6 +297,129 @@ class ImportOfficialProgramsTests(APITestCase):
             self.assertIn(name, body)
 
 
+class ImportProgramDetailsTests(APITestCase):
+    def setUp(self):
+        self.program = OpportunityProgram.objects.create(title='The Earth Prize', provider='The Earth Prize', program_type='international', category='Competition')
+
+    def detail(self, **values):
+        return {
+            'id': self.program.pk, 'overview': 'A global sustainability competition for teams of up to 5.', 'team': 'Teams of up to 5',
+            'benefits': ['7 regional winning teams get $10,000 each', '', None, '1:1 mentoring'], 'who_can_apply': ['Ages 13-19'],
+            'requirements': ['A sustainability project'], 'selection_process': 'Regional judging, then a final.', 'country': 'Switzerland', 'age_range': '13-19',
+            'past_participants_uz': [], **values,
+        }
+
+    def load(self, *rows):
+        return run('import_official_programs', write([{'id': self.program.pk, 'official_url': None}]), details=write(list(rows)))
+
+    def test_details_are_stored_cleaned_and_a_second_run_changes_nothing(self):
+        self.load(self.detail())
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.benefits, ['7 regional winning teams get $10,000 each', '1:1 mentoring'])
+        self.assertEqual((self.program.team_format, self.program.country, self.program.eligible_ages), ('Teams of up to 5', 'Switzerland', '13-19'))
+        self.assertEqual((self.program.who_can_apply, self.program.requirements_list), (['Ages 13-19'], ['A sustainability project']))
+        self.assertIn('1 unchanged', self.load(self.detail()))
+
+    def test_null_or_empty_details_never_overwrite_and_existing_country_is_kept(self):
+        OpportunityProgram.objects.filter(pk=self.program.pk).update(country='Germany', benefits=['Old benefit'])
+        self.load(self.detail(benefits=[], overview=None, country='Switzerland'))
+        self.program.refresh_from_db()
+        self.assertEqual((self.program.country, self.program.benefits), ('Germany', ['Old benefit']))
+
+    def test_past_participants_need_a_name_and_a_source_and_linkedin_must_be_a_profile(self):
+        good = {'name': 'Aziz Karimov', 'role': 'winner', 'year': 2024, 'linkedin_url': 'https://www.linkedin.com/in/aziz-karimov/', 'source_url': 'https://example.org/winners'}
+        self.load(self.detail(past_participants_uz=[
+            good,
+            {'name': 'Search Only', 'role': 'participant', 'year': 2023, 'linkedin_url': 'https://www.linkedin.com/search/results/people/?keywords=x', 'source_url': 'https://example.org/p'},
+            {'name': 'No Source', 'role': 'winner', 'year': 2023, 'linkedin_url': None, 'source_url': None},
+            {'name': 'Aziz Karimov', 'source_url': 'https://example.org/dup'},
+            {'role': 'winner', 'source_url': 'https://example.org/x'},
+            *[{'name': f'Person {n}', 'source_url': 'https://example.org/p'} for n in range(8)],
+        ]))
+        self.program.refresh_from_db()
+        people = self.program.past_participants
+        self.assertEqual(len(people), 5)
+        self.assertEqual(people[0], good)
+        self.assertIsNone(people[1]['linkedin_url'])
+        self.assertNotIn('No Source', [person['name'] for person in people])
+
+    def test_a_named_program_file_skips_the_shipped_details(self):
+        run('import_official_programs', write([{'id': self.program.pk, 'official_url': None}]))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.benefits, [])
+
+    def test_the_shipped_details_file_is_well_formed(self):
+        from apps.admissions.management.commands.import_official_programs import DETAILS_FILE
+        from apps.admissions.program_details import LIST_LIMITS, clean_people
+        rows = json.loads(DETAILS_FILE.read_text(encoding='utf-8'))
+        self.assertTrue(rows)
+        for row in rows:
+            people = row.get('past_participants_uz') or []
+            self.assertEqual(len(clean_people(people) or []), len(people), f'a person of row {row["id"]} would be dropped')
+            self.assertLessEqual(len(people), 5)
+            # Nothing is cut to fit: every list in the file is within the stored limit.
+            for field, name in (('benefits', 'benefits'), ('who_can_apply', 'who_can_apply'), ('requirements', 'requirements_list')):
+                self.assertLessEqual(len(row.get(field) or []), LIST_LIMITS[name], (row['id'], field))
+
+    def test_long_requirement_lists_keep_every_item_up_to_the_limit(self):
+        items = [f'Requirement number {n}' for n in range(12)]
+        self.load(self.detail(requirements=items))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.requirements_list, items)
+
+    def test_an_edition_also_replaces_fee_delivery_city_and_apply_page(self):
+        OpportunityProgram.objects.filter(pk=self.program.pk).update(
+            fee_usd=3095, fee_text='$3,095 residential', delivery_mode='hybrid', city='Gambier (residential)', application_url='https://example.org/summer',
+        )
+        self.load(self.detail(edition_core={
+            'city': None, 'fee_usd': 695, 'fee_text': '$695 tuition', 'delivery_mode': 'online', 'application_url': 'https://example.org/winter',
+        }))
+        self.program.refresh_from_db()
+        self.assertEqual((self.program.fee_usd, self.program.fee_text, self.program.delivery_mode), (695, '$695 tuition', 'online'))
+        self.assertEqual((self.program.city, self.program.application_url), ('', 'https://example.org/winter'))
+
+    def test_an_edition_apply_link_may_be_a_form_host_but_sources_stay_official_and_https_is_required(self):
+        self.load(self.detail(edition_core={'application_url': 'https://airtable.com/appX/shrY', 'sources': ['https://airtable.com/appX/shrY', 'https://example.org/program']}))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.application_url, 'https://airtable.com/appX/shrY')
+        self.assertEqual(self.program.official_sources, ['https://example.org/program'])
+        self.load(self.detail(edition_core={'application_url': 'http://example.org/insecure'}))
+        self.program.refresh_from_db()
+        self.assertEqual(self.program.application_url, '')
+
+    def test_the_details_deadline_is_used_when_nothing_else_has_one(self):
+        self.load(self.detail(deadline='2026-12-16'))
+        self.program.refresh_from_db()
+        self.assertEqual(str(self.program.deadline), '2026-12-16')
+        OpportunityProgram.objects.filter(pk=self.program.pk).update(deadline='2027-01-01')
+        self.load(self.detail(deadline='2026-12-16'))
+        self.program.refresh_from_db()
+        self.assertEqual(str(self.program.deadline), '2027-01-01')
+
+    def test_a_newer_edition_replaces_the_older_place_dates_and_sources(self):
+        OpportunityProgram.objects.filter(pk=self.program.pk).update(
+            country='United States', city='Washington DC', start_date='2025-04-03', end_date='2025-04-05', deadline_text='2025 deadline', deadline='2025-01-01',
+        )
+        self.load(self.detail(edition_core={
+            'country': 'Switzerland', 'city': 'Geneva', 'start_date': '2027-02-10', 'end_date': None, 'deadline': '2026-12-01',
+            'deadline_text': 'Apply by December 1, 2026', 'sources': ['https://www.theearthprize.org/2027', 'https://forms.gle/x'],
+        }))
+        self.program.refresh_from_db()
+        self.assertEqual((self.program.country, self.program.city), ('Switzerland', 'Geneva'))
+        self.assertEqual((str(self.program.start_date), self.program.end_date, str(self.program.deadline)), ('2027-02-10', None, '2026-12-01'))
+        self.assertEqual((self.program.deadline_text, self.program.official_sources), ('Apply by December 1, 2026', ['https://www.theearthprize.org/2027']))
+        self.assertIn('1 unchanged', self.load(self.detail(edition_core={
+            'country': 'Switzerland', 'city': 'Geneva', 'start_date': '2027-02-10', 'end_date': None, 'deadline': '2026-12-01',
+            'deadline_text': 'Apply by December 1, 2026', 'sources': ['https://www.theearthprize.org/2027'],
+        })))
+
+    def test_the_serializer_exposes_the_detail_fields(self):
+        from apps.admissions.serializers import OpportunityProgramSerializer
+        body = OpportunityProgramSerializer(self.program).data
+        for name in ('overview', 'benefits', 'who_can_apply', 'requirements_list', 'team_format', 'selection_process', 'past_participants'):
+            self.assertIn(name, body)
+
+
 class OfficialAidMatchTests(MatchFixture, APITestCase):
     def match(self):
         response = self.client.post(URL)

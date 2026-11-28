@@ -1,6 +1,8 @@
 """Admissions API serializers — catalog."""
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from ..program_details import LIST_LIMITS, check_people, check_strings
 from ..pricing import cost_fields, forget_cost
 from ..subject_ranks import university_subjects
 from ..models import (
@@ -104,6 +106,26 @@ class OpportunityProgramSerializer(serializers.ModelSerializer):
     def get_source_metadata(self, obj):
         origin = (obj.source_metadata or {}).get('origin') if isinstance(obj.source_metadata, dict) else None
         return {'origin': origin} if origin else {}
+
+    # The researched details the program page renders: the same rules the importer uses (program_details.py).
+    @staticmethod
+    def _checked(check, *args):
+        try:
+            return check(*args)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(error.messages)
+
+    def validate_past_participants(self, value):
+        return self._checked(check_people, value)
+
+    def validate_benefits(self, value):
+        return self._checked(check_strings, value, LIST_LIMITS['benefits'])
+
+    def validate_who_can_apply(self, value):
+        return self._checked(check_strings, value, LIST_LIMITS['who_can_apply'])
+
+    def validate_requirements_list(self, value):
+        return self._checked(check_strings, value, LIST_LIMITS['requirements_list'])
 
 
 # Plausible bounds for the numbers the admin catalogue edits. DRF's own

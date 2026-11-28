@@ -134,6 +134,28 @@ class CatalogAdminTests(AuditBaseMixin, APITestCase):
         self.program.refresh_from_db()
         self.assertEqual((self.program.source_key, self.program.deadline_text), ('lab-1', 'Every March'))
 
+    def test_program_detail_lists_are_validated_before_they_are_stored(self):
+        url = f'{OPPORTUNITIES}{self.program.id}/'
+        client = self.as_user(self.ops)
+        good = {'name': 'Aziz Karimov', 'role': 'winner', 'year': 2024, 'linkedin_url': 'https://www.linkedin.com/in/aziz-karimov/', 'source_url': 'https://example.org/w'}
+        for field, bad in (
+            ('past_participants', [{'name': 42, 'source_url': 'https://example.org/w'}]),
+            ('past_participants', [{'name': 'No Source'}]),
+            ('past_participants', [{**good, 'linkedin_url': 'https://www.linkedin.com/search/results/people/?keywords=x'}]),
+            ('past_participants', [{**good, 'linkedin_url': 'http://www.linkedin.com/in/aziz'}]),
+            ('past_participants', [{**good, 'source_url': 'javascript:alert(1)'}]),
+            ('past_participants', [{**good, 'name': f'P{n}'} for n in range(6)]),
+            ('past_participants', 'not a list'),
+            ('benefits', ['ok', 5]),
+            ('who_can_apply', 'text'),
+            ('requirements_list', [''] ),
+        ):
+            response = client.patch(url, {field: bad}, format='json')
+            self.assertEqual(response.status_code, 400, (field, bad, response.data))
+        self.assertEqual(client.patch(url, {'past_participants': [good], 'benefits': ['$500 prize']}, format='json').status_code, 200)
+        self.program.refresh_from_db()
+        self.assertEqual((self.program.past_participants, self.program.benefits), ([good], ['$500 prize']))
+
     def test_search_narrows_each_list(self):
         University.objects.create(name='Mountain College', country='Switzerland', city='Zurich')
         response = self.as_user(self.support).get(f'{UNIVERSITIES}?search=zurich')

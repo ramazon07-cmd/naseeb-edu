@@ -2,7 +2,7 @@ import { t, tp, tx, locale, formatDateLocale, formatNumberLocale } from '../i18n
 import { InlineLoadError } from '../components/states';
 import { dateText, localDateKey, money } from '../lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, CalendarDays, CalendarSearch, DollarSign, UsersRound, GraduationCap, HandCoins, ExternalLink, Search, SlidersHorizontal, ChevronDown, ChevronRight, ArrowLeft, ArrowUpRight, ListChecks, X, Check, Bookmark, Monitor, Award, Globe2, Heart, Star, Clock3, TriangleAlert } from 'lucide-react';
+import { MapPin, CalendarDays, CalendarSearch, DollarSign, UsersRound, GraduationCap, HandCoins, ExternalLink, Search, SlidersHorizontal, ChevronDown, ChevronRight, ArrowLeft, ArrowUpRight, ListChecks, X, Check, Bookmark, Monitor, Award, Gift, Globe2, Heart, Star, Clock3, TriangleAlert } from 'lucide-react';
 import { request } from '../api';
 import './catalog.css';
 import './programs-redesign.css';
@@ -12,6 +12,7 @@ import { BlueButton, DaysChip, GlassCard, KpiRow, KpiTile, PageHeader } from '..
 import { FilterOption } from '../components/college';
 import { Empty } from '../components/ui';
 import { withQuery } from '../lib/routes';
+import { countryFlag } from '../lib/countries';
 import { DeadlineRadar, DeadlineRadarButton } from '../components/DeadlineRadar';
 import { PAGE_PATHS } from '../lib/routes';
 import { daysUntil, dueLabel, dueTone } from '../lib/college';
@@ -155,6 +156,59 @@ function DetailFact({ icon: Icon, title, children }) {
   return <div className="nb-pd-fact"><span className="nb-pd-fact-icon" aria-hidden="true"><Icon size={18} /></span><span><small>{title}</small><b>{children}</b></span></div>;
 }
 
+// A titled bullet list ("What you get"). Renders nothing when the program has no items.
+function DetailList({ title, items, icon: Icon }) {
+  const list = (Array.isArray(items) ? items : []).map((entry) => (typeof entry === 'string' || typeof entry === 'number' ? String(entry).trim() : '')).filter(Boolean);
+  if (!list.length) return null;
+  return <GlassCard tone="solid" title={title} headingLevel="h3"><ul className="nb-pd-list">{list.map((entry, index) => <li key={`${index}-${entry}`}><Icon size={16} aria-hidden="true" /><span>{entry}</span></li>)}</ul></GlassCard>;
+}
+
+// Fixed team formats are translated; any other researched wording stays as written (English for now).
+const teamLabel = (value) => {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (/^individual( applicants?| applications?| attendees| delegates)?$/i.test(text)) return t('Individual');
+  const range = text.match(/^(individual or )?teams? of (\d+)\s*[–-]\s*(\d+)(?: students| members)?$/i);
+  if (range) return range[1] ? t('Individual or teams of {min}–{max}', { min: range[2], max: range[3] }) : t('Teams of {min}–{max}', { min: range[2], max: range[3] });
+  if (/^individual or teams$/i.test(text)) return t('Individual or teams');
+  const upTo = text.match(/^(individual or )?teams? of up to (\d+)$/i);
+  if (upTo) return upTo[1] ? t('Individual or teams of up to {n}', { n: upTo[2] }) : t('Teams of up to {n}', { n: upTo[2] });
+  return text;
+};
+
+const roleLabel = (role) => {
+  const key = typeof role === 'string' ? role.toLowerCase() : '';
+  if (/winner|laureate|champion|medal/.test(key)) return t('Program winner');
+  if (/finalist/.test(key)) return t('Program finalist');
+  return key ? t('Program participant') : '';
+};
+
+// Up to five public past participants from Uzbekistan, each with a LinkedIn profile and the page that shows the participation.
+function PastParticipants({ people, core }) {
+  // Defensive: stored data is edited through the admin API, so a bad entry is skipped, never allowed to crash the page.
+  const webLink = (value) => (typeof value === 'string' && /^https?:\/\//i.test(value.trim()) ? value.trim() : '');
+  const list = (Array.isArray(people) ? people : []).map((person) => ({
+    name: typeof person?.name === 'string' ? person.name.trim() : '', role: person?.role, year: Number.isInteger(person?.year) ? person.year : '',
+    linkedin_url: webLink(person?.linkedin_url), source_url: webLink(person?.source_url),
+  })).filter((person) => person.name).slice(0, 5);
+  if (!list.length) return <GlassCard tone="solid" title={t('Past participants and winners')} headingLevel="h3">
+    <p className="nb-pd-sub">{t('See how past participants and winners describe this program on LinkedIn and what they did next.')}</p>
+    <div className="nb-pd-people">{[[t('Participants on LinkedIn'), core], [t('Winners on LinkedIn'), `${core} winner`]].map(([title, query]) => <a key={title} href={linkedInSearch(query)} target="_blank" rel="noreferrer"><span className="nb-pd-in" aria-hidden="true">in</span><span><b>{title}</b><small>“{query}”</small></span><ArrowUpRight size={16} aria-hidden="true" /></a>)}</div>
+    <p className="nb-pd-note">{t('Opens LinkedIn search in a new tab · you may need to sign in')}</p>
+  </GlassCard>;
+  return <GlassCard tone="solid" title={t('Past participants from Uzbekistan')} headingLevel="h3">
+    <p className="nb-pd-sub">{t('Students from Uzbekistan who took part in this program, from public pages.')}</p>
+    <ul className="nb-pd-alumni">{list.map((person, index) => <li key={`${index}-${person.name}`}>
+      <span className="nb-pd-avatar" aria-hidden="true">{person.name.trim().charAt(0).toUpperCase()}</span>
+      <span className="nb-pd-alumni-text"><b>{person.name}</b><small>{[roleLabel(person.role), person.year].filter(Boolean).join(' · ')}</small></span>
+      <span className="nb-pd-alumni-links">
+        {person.linkedin_url && <a className="nb-pd-li" href={person.linkedin_url} target="_blank" rel="noreferrer noopener" aria-label={`${t('LinkedIn profile')}: ${person.name}`}><span className="nb-pd-in" aria-hidden="true">in</span>LinkedIn</a>}
+        {person.source_url && <a className="nb-pd-src" href={person.source_url} target="_blank" rel="noreferrer noopener" aria-label={`${t('Source')}: ${person.name}`}>{t('Source')}<ArrowUpRight size={13} aria-hidden="true" /></a>}
+      </span>
+    </li>)}</ul>
+    <p className="nb-pd-note">{t('Opens in a new tab · LinkedIn may ask you to sign in')}</p>
+  </GlassCard>;
+}
+
 // A whole program page inside Programs: everything the catalog row holds, the date state, people
 // links and a few other open programs. It only reads data the page already has.
 function ProgramDetail({ entry, similar, saved, saveBusy, today, onToggle, onBack, onOpen }) {
@@ -180,7 +234,19 @@ function ProgramDetail({ entry, similar, saved, saveBusy, today, onToggle, onBac
   const logo = programLogo(item);
   const state = closed ? 'Closed' : due?.exact ? 'Date confirmed' : due ? 'Expected · based on last year' : 'Date not announced yet';
   const url = item.application_url;
-  const deadline = <section className={`nb-pd-deadline ${closed ? 'is-over' : tone === 'hot' ? 'is-hot' : ''}`.trim()} aria-label={t('Deadline')}>
+  const whoList = Array.isArray(item.who_can_apply) ? item.who_can_apply : [];
+  // The Telegram-post style header: country (with flag), format, age group, team, cost, deadline. Only what is known.
+  const flag = countryFlag(item.country);
+  const ageGroup = item.eligible_ages ? item.eligible_ages : grades.length ? `${t('Grades')} ${grades.join(', ')}` : '';
+  const keyFacts = [
+    [t('Country'), item.country ? `${flag ? `${flag} ` : ''}${item.country}` : ''],
+    [t('Format'), delivery],
+    [t('Age group'), ageGroup],
+    [t('Team'), teamLabel(item.team_format)],
+    [t('Cost'), cost],
+    [t('Deadline'), due ? dateText(due.date) : ''],
+  ].filter(([, value]) => value);
+  const deadline =<section className={`nb-pd-deadline ${closed ? 'is-over' : tone === 'hot' ? 'is-hot' : ''}`.trim()} aria-label={t('Deadline')}>
     {due ? <span className="nb-pd-cal" aria-hidden="true">{due.day && <b>{formatNumberLocale(due.day)}</b>}<small>{formatDateLocale(due.date, { month: 'short' })}</small></span> : <span className="nb-pd-cal is-none" aria-hidden="true"><CalendarSearch size={22} /></span>}
     <div><small>{t('Deadline')}</small><b><ProgramDeadline item={item} closed={closed} /></b><span className={`nb-pd-state ${due?.exact && !closed ? 'is-ok' : ''}`.trim()}>{t(state)}</span></div>
     {days != null && days >= 0 && <em className={`nb-pd-left ${tone}`.trim()}>{dueLabel(days)}</em>}
@@ -196,21 +262,22 @@ function ProgramDetail({ entry, similar, saved, saveBusy, today, onToggle, onBac
       <div className="nb-pd-main">
         {isUnverifiedTelegramImport(item) && <p className="nb-pd-warn" role="note"><TriangleAlert size={18} aria-hidden="true" /><span><b>{t('From Telegram, not yet verified')}.</b> {t('We added this from a public Telegram channel and have not checked it yet. Confirm the details on the official page before you apply.')}{item.source_url && <> <a href={item.source_url} target="_blank" rel="noreferrer">{t('Original Telegram post')}</a></>}</span></p>}
         {!due?.exact && !closed && <p className="nb-pd-warn" role="note"><TriangleAlert size={18} aria-hidden="true" /><span>{t("We haven't confirmed this year's dates. Check the official site before you apply.")}</span></p>}
-        {item.description && <GlassCard tone="solid" title={t('About this program')} headingLevel="h3"><p className="nb-pd-about">{t(item.description)}</p></GlassCard>}
+        {keyFacts.length > 0 && <ul className="nb-pd-keyfacts" aria-label={t('Key facts')}>{keyFacts.map(([label, value]) => <li key={label}><small>{label}</small><b>{value}</b></li>)}</ul>}
+        {(item.overview || item.description) && <GlassCard tone="solid" title={t('About this program')} headingLevel="h3"><p className="nb-pd-about">{t(item.overview || item.description)}</p></GlassCard>}
+        <DetailList title={t('What you get')} items={item.benefits} icon={Gift} />
+        {whoList.length > 0 ? <DetailList title={t('Who can apply')} items={whoList} icon={UsersRound} /> : null}
+        <DetailList title={t('Requirements')} items={item.requirements_list} icon={ListChecks} />
+        {item.selection_process && <GlassCard tone="solid" title={t('How selection works')} headingLevel="h3"><p className="nb-pd-about">{item.selection_process}</p></GlassCard>}
         <div className="nb-pd-facts">
-          <DetailFact icon={UsersRound} title={t('Who can apply')}>{who}</DetailFact>
+          {whoList.length === 0 && <DetailFact icon={UsersRound} title={t('Who can apply')}>{who}</DetailFact>}
           <DetailFact icon={MapPin} title={t('Format and place')}>{[delivery, place].filter(Boolean).join(' · ')}</DetailFact>
           <DetailFact icon={CalendarDays} title={t('Program dates')}>{dates}</DetailFact>
           <DetailFact icon={DollarSign} title={t('Cost')}>{cost}</DetailFact>
           <DetailFact icon={HandCoins} title={t('Financial aid')}>{item.aid_details ? t(item.aid_details) : ''}</DetailFact>
-          <DetailFact icon={ListChecks} title={t('Requirements')}>{item.requirements ? t(item.requirements) : ''}</DetailFact>
+          {!(item.requirements_list || []).length && <DetailFact icon={ListChecks} title={t('Requirements')}>{item.requirements ? t(item.requirements) : ''}</DetailFact>}
         </div>
         {verified && sources.length > 0 && <p className="nb-pd-note">{t('Official source')}: {sources.slice(0, 3).map((link, index) => <span key={link}>{index > 0 && ' · '}<a href={link} target="_blank" rel="noreferrer">{linkHost(link)}</a></span>)} · {tx`Checked on ${dateText(item.official_verified_at)}`}</p>}
-        <GlassCard tone="solid" title={t('Past participants and winners')} headingLevel="h3">
-          <p className="nb-pd-sub">{t('See how past participants and winners describe this program on LinkedIn and what they did next.')}</p>
-          <div className="nb-pd-people">{[[t('Participants on LinkedIn'), core], [t('Winners on LinkedIn'), `${core} winner`]].map(([title, query]) => <a key={title} href={linkedInSearch(query)} target="_blank" rel="noreferrer"><span className="nb-pd-in" aria-hidden="true">in</span><span><b>{title}</b><small>“{query}”</small></span><ArrowUpRight size={16} aria-hidden="true" /></a>)}</div>
-          <p className="nb-pd-note">{t('Opens LinkedIn search in a new tab · you may need to sign in')}</p>
-        </GlassCard>
+        <PastParticipants people={item.past_participants} core={core} />
       </div>
       <aside className="nb-pd-side">
         {deadline}
