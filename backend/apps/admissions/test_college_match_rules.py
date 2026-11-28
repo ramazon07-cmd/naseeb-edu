@@ -258,6 +258,9 @@ class OrderingTests(RulesFixture, APITestCase):
     def test_suggested_programs_do_not_match_an_abbreviation_inside_another_word(self):
         from apps.admissions.college_match import suggested_programs
         from apps.admissions.models import UniversityProgram
+        # Only these programs: the fixture's own CS programs would fill the two-program cut first,
+        # and which comes first depends on collation (SQLite and PostgreSQL order 'CS' differently).
+        self.state.programs.all().delete()
         UniversityProgram.objects.create(university=self.state, name='BSc Physics', canonical_major='Physics')
         UniversityProgram.objects.create(university=self.state, name='BA Political Science', canonical_major='Political Science')
         UniversityProgram.objects.create(university=self.state, name='BSc CS Theory', canonical_major='CS Theory')
