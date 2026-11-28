@@ -42,3 +42,16 @@ test('unticking a band sends the checked set, keeping unknown while it stays che
 test('the search is trimmed to what the server accepts', () => {
   assert.equal(query({ query: 'x'.repeat(150) }).search.length, 100);
 });
+
+test('the QS table switches to the subject rank and subject scores when a subject is picked', async () => {
+  const { readFileSync } = await import('node:fs');
+  const page = readFileSync(new URL('../src/pages/CollegeSearchPage.jsx', import.meta.url), 'utf8');
+  const hook = readFileSync(new URL('../src/hooks/useCollegeSearch.js', import.meta.url), 'utf8');
+  assert.match(hook, /subject: payload\.subject \?\? null/);
+  assert.match(page, /const bySubject = view === 'qs' && subject && search\.subject\?\.code === subject/);
+  assert.match(page, /publishedRank\(ranked\.rank, ranked\.label\)/);
+  assert.match(page, /t\('Subject score'\)/);
+  // The gold "#N Subject" chip is gone from that view; the admissions cards keep it.
+  assert.match(page, /bySubject \? world !== '—' && /);
+  assert.equal(page.match(/<SubjectRankChip/g).length, 2);
+});

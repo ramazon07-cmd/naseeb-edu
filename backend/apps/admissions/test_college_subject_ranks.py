@@ -30,11 +30,34 @@ class SubjectSearchTests(CollegeSearchFixture, APITestCase):
 
     def test_rows_carry_the_rank_in_the_selected_subject_and_unranked_ones_none(self):
         rows = self.by_name(f'subject={CS}&page_size=50')
-        self.assertEqual(rows[self.mit.name]['subject_rank'], {'code': CS, 'rank': 1, 'label': '', 'score': 98.5, 'year': 2026})
+        self.assertEqual(rows[self.mit.name]['subject_rank'], {'code': CS, 'rank': 1, 'label': '', 'score': 98.5, 'year': 2026, 'values': [None, None, None, None, None]})
         self.assertEqual(rows[self.state.name]['subject_rank']['label'], '201-250')
         self.assertEqual(rows[self.oxford.name]['subject_rank']['label'], '=4')
         self.assertIsNone(rows[self.tashkent.name]['subject_rank'])
         self.assertIsNone(rows[self.unranked.name]['subject_rank'])
+
+    def test_rows_carry_the_subjects_indicator_scores_in_the_order_of_its_columns(self):
+        UniversitySubjectRank.objects.filter(university=self.mit, subject_code='ARC01').delete()
+        rank(self.mit, 'ARC01', 1, '', 99.0)
+        rank(self.oxford, 'ARC01', 2, '', 95.5)
+        UniversitySubjectRank.objects.filter(subject_code='ARC01', university=self.mit).update(
+            academic_score='98.7', employer_score='90.1', citations_score='80.0', h_index_score='70.5')
+        data = self.search('subject=ARC01&subject_only=true&sort=subject&page_size=50')
+        # Archaeology is scored by academic and employer reputation, citations and H-index (no IRN).
+        self.assertEqual(data['subject']['code'], 'ARC01')
+        self.assertEqual([item['key'] for item in data['subject']['indicators']], ['academic', 'employer', 'citations', 'h_index'])
+        self.assertEqual(data['results'][0]['subject_rank']['values'], [98.7, 90.1, 80.0, 70.5])
+        self.assertEqual(data['results'][1]['subject_rank']['values'], [None, None, None, None])
+
+    def test_the_answer_names_the_score_columns_only_when_a_subject_is_asked_for(self):
+        self.assertNotIn('subject', self.search())
+        self.assertEqual(self.search(f'subject={CS}')['subject']['year'], 2026)
+
+    def test_a_tie_in_a_published_range_goes_to_the_better_subject_score_and_unranked_stay_last(self):
+        rank(self.mit, 'MAT01', 201, '201-250', 70.0)
+        rank(self.oxford, 'MAT01', 201, '201-250', 80.0)
+        names = self.names('subject=MAT01&sort=subject&page_size=50')
+        self.assertEqual(names[:2], [self.oxford.name, self.mit.name])
 
     def test_rows_have_no_subject_rank_key_without_a_subject(self):
         self.assertNotIn('subject_rank', self.search()['results'][0])

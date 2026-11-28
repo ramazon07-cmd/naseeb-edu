@@ -1139,6 +1139,11 @@
   margin-top: 0;
 }
 
+.nb-blue .nb-colleges .uni-fit.subj-rank.is-top b {
+  background: var(--nb-gold);
+  color: var(--nb-gold-fg);
+}
+
 .nb-blue .nb-subj-chip.is-top,
 .nb-blue .nb-subj-rank.is-top {
   background: var(--nb-gold);
