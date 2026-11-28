@@ -61,6 +61,7 @@ Per student the essays count only essays the student shared with the counselor. 
 |---|---|---|
 | `BOT_SERVICE_KEY` | backend env group **and** the bot worker | shared secret, at least 32 random characters, identical in both |
 | `BOT_TOKEN` | bot worker only | from BotFather |
+| `BOT_START_DELAY` | bot worker only, optional | seconds to wait before polling so the previous instance of a deploy stops first (default 15; 0 disables) |
 | `BACKEND_URL` | bot worker only | `https://api.naseebedu.com` |
 | `TELEGRAM_BOT_USERNAME` | backend | the bot's username without `@`. Set: students connect Telegram on Meetings (one-tap link `t.me/<bot>?start=s_<token>`) and get meeting messages and reminders there; a student needs it to request a meeting. Unset: Meetings works without it |
 | `BOT_LOGIN_MAX_ATTEMPTS`, `BOT_LOGIN_WINDOW_SECONDS`, `BOT_DUE_GRACE_MINUTES`, `BOT_LOGIN_ACCOUNT_CEILING` | backend, optional | defaults 5, 900, 5, 30 |

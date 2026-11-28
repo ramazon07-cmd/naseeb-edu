@@ -51,6 +51,23 @@ export async function migrateLegacyTokens(storage, revoke) {
   }
 }
 
+/**
+ * True when the JWT `access` expires within `skewMs` (or already has). A token
+ * that cannot be decoded is reported as not expiring: the server decides, and
+ * the 401 path still refreshes it.
+ */
+export function accessExpiresSoon(access, now = Date.now(), skewMs = 60_000) {
+  try {
+    const part = String(access).split('.')[1]
+    if (!part) return false
+    const base64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const exp = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='))).exp
+    return typeof exp === 'number' && exp * 1000 - now <= skewMs
+  } catch {
+    return false
+  }
+}
+
 function newSignInId(random = Math.random) {
   return Math.floor(random() * 36 ** 8).toString(36)
 }

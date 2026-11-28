@@ -1,6 +1,6 @@
 import { getLanguage, t } from './i18n'
 import {
-  AUTH_CHANNEL, AUTH_LOCK, browserLock, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
+  AUTH_CHANNEL, AUTH_LOCK, accessExpiresSoon, browserLock, createCookieAuth, createRefresher, createSessionStore, isSignOutSignal,
   migrateLegacyTokens,
 } from './authTokens'
 import { readPayload } from './lib/payload.js'
@@ -54,9 +54,21 @@ authChannel?.addEventListener('message', (event) => {
 })
 
 // The in-memory access token, or a fresh one from the refresh cookie after a
-// reload (null when signed out).
+// reload (null when signed out). A token about to expire is refreshed first,
+// through the shared single-flight refresh, so a page's parallel requests wait
+// for one new token instead of all being sent with the old one and coming back 401.
 async function accessToken() {
-  return getToken('access') || (hasSession() ? refreshAccessToken() : null)
+  const access = getToken('access')
+  if (!access) return hasSession() ? refreshAccessToken() : null
+  if (hasSession() && accessExpiresSoon(access)) {
+    try {
+      return await refreshAccessToken(access)
+    } catch {
+      // Not fatal here: send the old token; a 401 goes through the normal refresh-and-retry.
+      return getToken('access') || access
+    }
+  }
+  return access
 }
 
 // `timeoutMs` bounds the wait for the response headers. `keepAbortLink` (streams)

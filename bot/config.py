@@ -14,6 +14,7 @@ class Config:
     service_key: str
     http_timeout: float = 10.0
     cache_seconds: float = 5.0
+    start_delay: float = 15.0
 
 
 def load_env_file(path):
@@ -28,10 +29,21 @@ def load_env_file(path):
         os.environ.setdefault(name.strip(), value.strip().strip('"').strip("'"))
 
 
+def env_seconds(name, default):
+    """A non-negative number of seconds from the environment; the default when unset or not a number."""
+    try:
+        return max(0.0, float(os.environ.get(name, '').strip()))
+    except ValueError:
+        return default
+
+
 def load_config():
     load_env_file(Path(__file__).with_name('.env'))
     values = {name: os.environ.get(name, '').strip() for name in ('BOT_TOKEN', 'BACKEND_URL', 'BOT_SERVICE_KEY')}
     missing = [name for name, value in values.items() if not value]
     if missing:
         raise ConfigError(f'Missing environment variables: {", ".join(missing)}')
-    return Config(token=values['BOT_TOKEN'], backend_url=values['BACKEND_URL'].rstrip('/'), service_key=values['BOT_SERVICE_KEY'])
+    return Config(
+        token=values['BOT_TOKEN'], backend_url=values['BACKEND_URL'].rstrip('/'), service_key=values['BOT_SERVICE_KEY'],
+        start_delay=env_seconds('BOT_START_DELAY', Config.start_delay),
+    )
