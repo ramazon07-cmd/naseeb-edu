@@ -185,7 +185,21 @@ def school_staff(school_id, roles=SCHOOL_STAFF_ROLES):
     return User.objects.filter(school_id=school_id, role__in=roles, is_active=True)
 
 
+def bookable_students(user):
+    """Students ``user`` may invite to a meeting: an assistant meets any active student of their school."""
+    if user.role != User.Role.ASSISTANT:
+        return visible_students(user)
+    if not user.school_id:
+        return StudentProfile.objects.none()
+    return StudentProfile.objects.filter(
+        school_id=user.school_id, school__is_active=True, user__is_active=True, awaiting_confirmation=False,
+    )
+
+
 def booking_participants_for(profile):
-    """Staff of the student's current school (their assigned counselor included)."""
+    """Staff of the student's current school (their assigned counselor included).
+
+    Assistants publish meeting hours too, so they must be bookable, or their link fails for every student.
+    """
     school_id = profile.school_id if profile else None
-    return school_staff(school_id).order_by('role', 'first_name', 'last_name', 'username')
+    return school_staff(school_id, roles=(*SCHOOL_STAFF_ROLES, User.Role.ASSISTANT)).order_by('role', 'first_name', 'last_name', 'username')

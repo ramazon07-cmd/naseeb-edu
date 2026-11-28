@@ -438,17 +438,24 @@ class AssistantScopeTests(AssistantBase):
         self.assertIn('home', response.data)
         self.assertEqual(self.client.get('/api/dashboard/stats/', {'snapshot': self.also_mine.pk}).status_code, 404)
 
-    def test_assistant_books_meetings_with_their_students_only(self):
+    def test_assistant_books_meetings_with_any_student_of_their_school_only(self):
         start = (timezone.now() + timedelta(days=3)).replace(microsecond=0)
         booking = {'topic': 'Shortlist', 'starts_at': start.isoformat(), 'duration_minutes': 30}
         own = self.client.post('/api/bookings/', {**booking, 'student': self.mine.pk}, format='json')
         self.assertEqual(own.status_code, 201, own.data)
         self.assertEqual(own.data['participant'], self.assistant.pk)
+        # Not assigned to this assistant, but in their school: invitable too.
         later = (start + timedelta(hours=2)).isoformat()
-        other = self.client.post('/api/bookings/', {**booking, 'starts_at': later, 'student': self.also_mine.pk}, format='json')
+        school_mate = self.client.post('/api/bookings/', {**booking, 'starts_at': later, 'student': self.also_mine.pk}, format='json')
+        self.assertEqual(school_mate.status_code, 201, school_mate.data)
+        outsider = self.make_student('sami', None, school=self.other_school)
+        latest = (start + timedelta(hours=4)).isoformat()
+        other = self.client.post('/api/bookings/', {**booking, 'starts_at': latest, 'student': outsider.pk}, format='json')
         self.assertEqual(other.status_code, 400)
         listed = self.client.get('/api/bookings/').data
-        self.assertEqual([row['id'] for row in listed.get('results', listed)], [own.data['id']])
+        self.assertEqual(sorted(row['id'] for row in listed.get('results', listed)), sorted([own.data['id'], school_mate.data['id']]))
+        # The rest of the workspace stays limited to the assistant's own students.
+        self.assertEqual(self.client.get(f'/api/students/{self.also_mine.pk}/').status_code, 404)
 
     def test_assistant_without_a_counselor_sees_nobody(self):
         User.objects.filter(pk=self.assistant.pk).update(supervising_counselor=None)
